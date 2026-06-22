@@ -1,5 +1,4 @@
 import FadeIn from '../components/FadeIn'
-import ContactButton from '../components/ContactButton'
 import AnimatedText from '../components/AnimatedText'
 import MiniScene from '../components/MiniScene'
 
@@ -45,9 +44,6 @@ export default function AboutSection() {
         />
       </div>
 
-      <div className="mt-16 sm:mt-20 md:mt-24 relative z-10">
-        <ContactButton />
-      </div>
     </section>
   )
 }

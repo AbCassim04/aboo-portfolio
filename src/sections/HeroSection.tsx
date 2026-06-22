@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import FadeIn from '../components/FadeIn'
 import ContactButton from '../components/ContactButton'
+import Magnet from '../components/Magnet'
 
 const HeroScene = lazy(() => import('../components/HeroScene'))
 
@@ -61,7 +62,11 @@ export default function HeroSection() {
             </p>
           </FadeIn>
           <FadeIn delay={0.5} y={20}>
-            <ContactButton />
+            <Magnet padding={80} strength={4}>
+              <a href="mailto:aboobakercassim@gmail.com" target="_blank" rel="noopener noreferrer">
+                <ContactButton />
+              </a>
+            </Magnet>
           </FadeIn>
         </div>
       </div>
