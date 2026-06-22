@@ -1,8 +1,11 @@
-import { useState } from 'react'
-import { motion, useTransform, useMotionValueEvent, type MotionValue } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
+import type { Zone } from '../hooks/useCameraNavigation'
 
 interface SkillsOverlayProps {
-  scrollProgress: MotionValue<number>
+  currentZone: Zone
+  isTransitioning: boolean
+  navigateTo: (zone: Zone) => void
 }
 
 const SKILLS = [
@@ -33,81 +36,94 @@ const SKILLS = [
   },
 ]
 
-export default function SkillsOverlay({ scrollProgress }: SkillsOverlayProps) {
-  const opacity = useTransform(scrollProgress, [0.45, 0.50, 0.57, 0.62], [0, 1, 1, 0])
-  const [interactive, setInteractive] = useState(false)
-  useMotionValueEvent(opacity, 'change', (v) => setInteractive(v > 0.01))
+export default function SkillsOverlay({ currentZone, isTransitioning, navigateTo }: SkillsOverlayProps) {
+  const visible = currentZone === 'skills' && !isTransitioning
 
   return (
-    <motion.div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 10,
-        opacity,
-        pointerEvents: interactive ? 'auto' : 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '1rem',
-      }}
-    >
-      <div
-        style={{
-          background: 'rgba(12, 12, 12, 0.80)',
-          backdropFilter: 'blur(4px)',
-          borderRadius: '24px',
-          padding: 'clamp(1.5rem, 4vw, 3rem)',
-          maxWidth: '800px',
-          width: '100%',
-          border: '1px solid rgba(215,226,234,0.08)',
-        }}
-      >
-        <h2
-          className="hero-heading font-black uppercase text-center mb-6 sm:mb-8"
-          style={{ fontSize: 'clamp(2.5rem, 10vw, 120px)' }}
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          key="skills-overlay"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
-          Skills
-        </h2>
-
-        <div>
-          {SKILLS.map((skill) => (
-            <div
-              key={skill.num}
-              className="flex gap-4 md:gap-6 items-start py-4 sm:py-5"
-              style={{ borderTop: '1px solid rgba(215,226,234,0.12)' }}
+          {/* Back button */}
+          <div className="absolute top-6 left-6 md:top-8 md:left-8">
+            <motion.button
+              type="button"
+              onClick={() => navigateTo('hub')}
+              className="flex items-center gap-2 text-[#D7E2EA] rounded-full px-5 py-3 cursor-pointer text-sm uppercase tracking-widest"
+              style={{ border: '1px solid rgba(215,226,234,0.2)', backdropFilter: 'blur(8px)', background: 'rgba(12,12,12,0.3)' }}
+              whileHover={{ background: 'rgba(215,226,234,0.1)' }}
+              transition={{ duration: 0.2 }}
             >
-              <span
-                className="font-black text-[#D7E2EA] leading-none flex-shrink-0"
-                style={{ fontSize: 'clamp(1.5rem, 4vw, 3.5rem)', opacity: 0.25 }}
-              >
-                {skill.num}
-              </span>
-              <div className="flex flex-col gap-1 pt-1">
-                <span
-                  className="font-medium uppercase text-[#D7E2EA]"
-                  style={{ fontSize: 'clamp(0.85rem, 1.8vw, 1.4rem)' }}
-                >
-                  {skill.name}
-                </span>
-                <p
-                  className="font-light leading-relaxed text-[#D7E2EA]"
-                  style={{ fontSize: 'clamp(0.75rem, 1.2vw, 0.95rem)', opacity: 0.55 }}
-                >
-                  {skill.desc}
-                </p>
-              </div>
-            </div>
-          ))}
-          <div style={{ borderTop: '1px solid rgba(215,226,234,0.12)' }} />
-          <p
-            className="text-center text-[#D7E2EA] font-light mt-3"
-            style={{ fontSize: 'clamp(0.65rem, 1vw, 0.8rem)', opacity: 0.3 }}
+              <ArrowLeft size={16} />
+              Back
+            </motion.button>
+          </div>
+
+          {/* Content card */}
+          <div
+            style={{
+              background: 'rgba(12, 12, 12, 0.5)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(215,226,234,0.08)',
+              borderRadius: '30px',
+              padding: 'clamp(2rem, 5vw, 3rem)',
+              maxWidth: '800px',
+              width: '100%',
+            }}
           >
-            {SKILLS.length} disciplines · Wits University · 2024–present
-          </p>
-        </div>
-      </div>
-    </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15, duration: 0.5 }}
+              className="hero-heading font-black uppercase text-center mb-6"
+              style={{ fontSize: 'clamp(2.5rem, 10vw, 100px)' }}
+            >
+              Skills
+            </motion.h2>
+
+            <div className="max-h-[60vh] overflow-y-auto">
+              {SKILLS.map((skill, i) => (
+                <motion.div
+                  key={skill.num}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 + i * 0.1, duration: 0.35 }}
+                  className="flex gap-4 md:gap-6 items-start py-4 sm:py-5"
+                  style={{ borderTop: '1px solid rgba(215,226,234,0.12)' }}
+                >
+                  <span
+                    className="font-black text-[#D7E2EA] leading-none flex-shrink-0"
+                    style={{ fontSize: 'clamp(1.5rem, 4vw, 3.5rem)', opacity: 0.25 }}
+                  >
+                    {skill.num}
+                  </span>
+                  <div className="flex flex-col gap-1 pt-1">
+                    <span
+                      className="font-medium uppercase text-[#D7E2EA]"
+                      style={{ fontSize: 'clamp(0.85rem, 1.8vw, 1.4rem)' }}
+                    >
+                      {skill.name}
+                    </span>
+                    <p
+                      className="font-light leading-relaxed text-[#D7E2EA]"
+                      style={{ fontSize: 'clamp(0.75rem, 1.2vw, 0.95rem)', opacity: 0.55 }}
+                    >
+                      {skill.desc}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+              <div style={{ borderTop: '1px solid rgba(215,226,234,0.12)' }} />
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
