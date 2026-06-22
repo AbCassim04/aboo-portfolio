@@ -1,10 +1,6 @@
-import { useRef } from 'react'
-import { useScroll, useTransform, motion } from 'framer-motion'
-import LiveProjectButton from '../components/LiveProjectButton'
+// ── Swapify visuals ────────────────────────────────────────────────────────
 
-// ── Swapify mocks ──────────────────────────────────────────────────────────
-
-function SwapifyUIPreview() {
+export function SwapifyUIPreview() {
   return (
     <div style={{ width: '100%', height: '100%', background: '#0d0d1a', padding: '8px', boxSizing: 'border-box', fontFamily: 'monospace', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingBottom: '6px', marginBottom: '6px', borderBottom: '1px solid rgba(119,33,177,0.2)', flexShrink: 0 }}>
@@ -34,7 +30,7 @@ function SwapifyUIPreview() {
   )
 }
 
-function SwapifyDBSchema() {
+export function SwapifyDBSchema() {
   return (
     <div style={{ width: '100%', height: '100%', background: '#0a0a1a', padding: '8px', boxSizing: 'border-box', position: 'relative', fontFamily: 'monospace', display: 'flex', flexDirection: 'column' }}>
       <span style={{ position: 'absolute', top: '8px', right: '8px', color: '#7721B1', fontSize: '7px', opacity: 0.7 }}>PostgreSQL</span>
@@ -60,7 +56,7 @@ function SwapifyDBSchema() {
   )
 }
 
-function SwapifyDashboard() {
+export function SwapifyDashboard() {
   return (
     <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #1a0a2e 0%, #0a1a3a 100%)', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' }}>
       <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundImage: 'linear-gradient(rgba(119,33,177,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(119,33,177,0.05) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
@@ -78,9 +74,9 @@ function SwapifyDashboard() {
   )
 }
 
-// ── AI Safety mocks ────────────────────────────────────────────────────────
+// ── AI Safety visuals ──────────────────────────────────────────────────────
 
-function AIBarChart() {
+export function AIBarChart() {
   const kwHeights = [18, 14, 22, 16, 12]
   const llmHeights = [50, 54, 48, 56, 52]
   return (
@@ -111,7 +107,7 @@ function AIBarChart() {
   )
 }
 
-function AIAfrikaans() {
+export function AIAfrikaans() {
   const lines = [
     'Die leerder moet die vraag beantwoord...',
     'Watter metode gebruik die ondersoeker?',
@@ -135,7 +131,7 @@ function AIAfrikaans() {
   )
 }
 
-function AIPipeline() {
+export function AIPipeline() {
   const steps = [
     { label: 'DBE EXAM PDF', color: '#3B8BD4' },
     { label: 'LLM GENERATE', color: '#7721B1' },
@@ -164,9 +160,9 @@ function AIPipeline() {
   )
 }
 
-// ── Data ───────────────────────────────────────────────────────────────────
+// ── Projects data ──────────────────────────────────────────────────────────
 
-const PROJECTS = [
+export const PROJECTS = [
   {
     num: '01',
     name: 'Swapify',
@@ -192,118 +188,3 @@ const PROJECTS = [
     },
   },
 ]
-
-// ── Card ───────────────────────────────────────────────────────────────────
-
-interface ProjectCardProps {
-  project: (typeof PROJECTS)[0]
-  index: number
-  progress: ReturnType<typeof useScroll>['scrollYProgress']
-}
-
-function ProjectCard({ project, index, progress }: ProjectCardProps) {
-  const targetScale = 1 - (PROJECTS.length - 1 - index) * 0.03
-  const scale = useTransform(progress, [0, 1], [1, targetScale])
-
-  return (
-    <div
-      className="sticky"
-      style={{ top: `calc(6rem + ${index * 28}px)`, height: '85vh' }}
-    >
-      <motion.div
-        style={{ scale, background: '#0C0C0C' }}
-        className="h-full rounded-[40px] sm:rounded-[50px] md:rounded-[60px] border-2 border-[#D7E2EA] p-4 sm:p-6 md:p-8 flex flex-col gap-4 sm:gap-6"
-      >
-        {/* Top row */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-            <span
-              className="font-black text-[#D7E2EA] leading-none"
-              style={{ fontSize: 'clamp(2rem, 5vw, 72px)' }}
-            >
-              {project.num}
-            </span>
-            <span className="font-medium uppercase tracking-widest text-[#D7E2EA] text-xs sm:text-sm opacity-60 border border-[#D7E2EA]/30 rounded-full px-3 py-1">
-              {project.category}
-            </span>
-            <span
-              className="font-black uppercase text-[#D7E2EA] leading-none"
-              style={{ fontSize: 'clamp(1.25rem, 3.5vw, 48px)' }}
-            >
-              {project.name}
-            </span>
-          </div>
-          <a href={project.href} target="_blank" rel="noopener noreferrer">
-            <LiveProjectButton />
-          </a>
-        </div>
-
-        {/* Description */}
-        <p
-          className="text-[#D7E2EA] font-light leading-relaxed"
-          style={{ fontSize: 'clamp(0.8rem, 1.4vw, 1.1rem)', opacity: 0.7 }}
-        >
-          {project.desc}
-        </p>
-
-        {/* Image grid */}
-        <div className="flex gap-3 flex-1 min-h-0">
-          {/* Left col — 40% */}
-          <div className="flex flex-col gap-3" style={{ flex: '0 0 40%' }}>
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{ height: 'clamp(110px, 14vw, 210px)' }}
-            >
-              {project.visuals.leftTop}
-            </div>
-            <div
-              className="rounded-2xl flex-1 overflow-hidden"
-              style={{ minHeight: 'clamp(140px, 20vw, 300px)' }}
-            >
-              {project.visuals.leftBottom}
-            </div>
-          </div>
-          {/* Right col — 60% */}
-          <div className="flex-1">
-            <div className="h-full rounded-2xl overflow-hidden">
-              {project.visuals.right}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
-// ── Section ────────────────────────────────────────────────────────────────
-
-export default function ProjectsSection() {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start start', 'end end'],
-  })
-
-  return (
-    <section
-      id="projects"
-      className="rounded-t-[40px] sm:rounded-t-[50px] md:rounded-t-[60px] -mt-10 sm:-mt-12 md:-mt-14 relative z-10 px-5 sm:px-8 md:px-10 pt-20 pb-10"
-      style={{ background: '#0C0C0C' }}
-    >
-      <h2
-        className="hero-heading font-black uppercase text-center mb-16 sm:mb-20 md:mb-28"
-        style={{ fontSize: 'clamp(3rem, 12vw, 160px)' }}
-      >
-        Projects
-      </h2>
-
-      <div ref={containerRef}>
-        {PROJECTS.map((project, i) => (
-          <div key={project.num} style={{ height: '85vh' }}>
-            <ProjectCard project={project} index={i} progress={scrollYProgress} />
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
