@@ -63,7 +63,7 @@ export default function HeroScene() {
       0.1,
       500,
     )
-    camera.position.z = isMobile ? 10 : 8
+    camera.position.z = isMobile ? 7 : 8
 
     // ── Renderer ────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -111,7 +111,7 @@ export default function HeroScene() {
       ? allNebulaConfigs.slice(0, 2)
       : allNebulaConfigs
     const nebulaPlanes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial }[] = []
-    const nebulaGeo = new THREE.PlaneGeometry(10, 10)
+    const nebulaGeo = new THREE.PlaneGeometry(isMobile ? 6 : 10, isMobile ? 6 : 10)
     for (const cfg of nebulaConfigs) {
       const mat = new THREE.MeshBasicMaterial({
         color: cfg.color,
@@ -138,7 +138,7 @@ export default function HeroScene() {
     const nodeGeo = new THREE.SphereGeometry(0.04, 8, 8)
 
     for (let i = 0; i < nodeCount; i++) {
-      const pos = randomInSphere(SPHERE_RADIUS)
+      const pos = randomInSphere(isMobile ? 2 : SPHERE_RADIUS)
       positions.push(pos)
       const mat = new THREE.MeshBasicMaterial({ color: pickNodeColor(i) })
       nodeMats.push(mat)
@@ -177,15 +177,15 @@ export default function HeroScene() {
     const allUFOConfigs = [
       {
         radius: 0.18, saucerColor: 0x3d1466, domeColor: 0x7721b1,
-        rimColor: 0x5a2090, orbitR: 6, tiltX: 0, tiltZ: 0, speed: 0.004,
+        rimColor: 0x5a2090, orbitR: isMobile ? 3.5 : 6, tiltX: 0, tiltZ: 0, speed: 0.004,
       },
       {
         radius: 0.12, saucerColor: 0x0a2a4a, domeColor: 0x3b8bd4,
-        rimColor: 0x1a4a6a, orbitR: 8, tiltX: Math.PI / 6, tiltZ: 0, speed: 0.003,
+        rimColor: 0x1a4a6a, orbitR: isMobile ? 4.5 : 8, tiltX: Math.PI / 6, tiltZ: 0, speed: 0.003,
       },
       {
         radius: 0.08, saucerColor: 0x0d3b35, domeColor: 0x1a5a50,
-        rimColor: 0x1a5a50, orbitR: 10, tiltX: -Math.PI / 9, tiltZ: 0.2, speed: 0.005,
+        rimColor: 0x1a5a50, orbitR: isMobile ? 5.0 : 10, tiltX: -Math.PI / 9, tiltZ: 0.2, speed: 0.005,
       },
     ]
     const ufoConfigs = isMobile ? allUFOConfigs.slice(0, 1) : allUFOConfigs
