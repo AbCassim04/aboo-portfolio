@@ -8,6 +8,7 @@ interface HeroOverlayProps {
   currentZone: Zone
   isTransitioning: boolean
   navigateTo: (zone: Zone) => void
+  onTakeFlight: () => void
 }
 
 const NAV_LINKS: { label: string; zone: Zone }[] = [
@@ -17,7 +18,7 @@ const NAV_LINKS: { label: string; zone: Zone }[] = [
   { label: 'Contact',  zone: 'contact'  },
 ]
 
-export default function HeroOverlay({ currentZone, isTransitioning, navigateTo }: HeroOverlayProps) {
+export default function HeroOverlay({ currentZone, isTransitioning, navigateTo, onTakeFlight }: HeroOverlayProps) {
   const visible = currentZone === 'hub' && !isTransitioning
 
   return (
@@ -61,6 +62,32 @@ export default function HeroOverlay({ currentZone, isTransitioning, navigateTo }
                 a cs &amp; maths student building at the intersection of ml, research, and the web
               </p>
             </FadeIn>
+
+            <FadeIn delay={0.7} y={20}>
+              <motion.button
+                type="button"
+                onClick={onTakeFlight}
+                style={{
+                  border:          '1.5px solid rgba(119,33,177,0.5)',
+                  background:      'rgba(119,33,177,0.08)',
+                  backdropFilter:  'blur(8px)',
+                  color:           '#D7E2EA',
+                  borderRadius:    '999px',
+                  padding:         '0.75rem 1.5rem',
+                  fontSize:        '0.85rem',
+                  fontWeight:      500,
+                  textTransform:   'uppercase',
+                  letterSpacing:   '0.15em',
+                  cursor:          'pointer',
+                }}
+                whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(119,33,177,0.5)' }}
+                animate={{ boxShadow: ['0 0 0px rgba(119,33,177,0)', '0 0 15px rgba(119,33,177,0.4)', '0 0 0px rgba(119,33,177,0)'] }}
+                transition={{ boxShadow: { duration: 2, repeat: Infinity } }}
+              >
+                🚀 Take Flight — Explore the universe
+              </motion.button>
+            </FadeIn>
+
             <FadeIn delay={0.5} y={20}>
               <Magnet padding={80} strength={4}>
                 <a href="mailto:aboobakercassim@gmail.com" target="_blank" rel="noopener noreferrer">
