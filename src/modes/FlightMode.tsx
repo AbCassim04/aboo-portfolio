@@ -209,6 +209,7 @@ const DESTINATIONS: Destination[] = [
   { name: 'SKILLS',   pos: [ 12, -1,  0], color: 0x3B8BD4, shape: 'octahedron',   size: 2.5 },
   { name: 'PROJECTS', pos: [  0, 10,  0], color: 0x22c55e, shape: 'dodecahedron', size: 3.2 },
   { name: 'CONTACT',  pos: [  0,-10,  0], color: 0xD7E2EA, shape: 'torusknot',    size: 2.0 },
+  { name: 'M87*',     pos: [  0,  0,-28], color: 0x1a0030, shape: 'torusknot',    size: 1.5 },
 ]
 
 function createGeometry(shape: string, size: number): THREE.BufferGeometry {
@@ -237,13 +238,16 @@ function makeDestLabel(text: string, hexColor: number): THREE.CanvasTexture {
 }
 
 interface FlightModeProps {
-  onExit: () => void
+  onExit:            () => void
+  onEnterBlackHole:  () => void
 }
 
-export default function FlightMode({ onExit }: FlightModeProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const onExitRef    = useRef(onExit)
+export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps) {
+  const containerRef        = useRef<HTMLDivElement>(null)
+  const onExitRef           = useRef(onExit)
+  const onEnterBlackHoleRef = useRef(onEnterBlackHole)
   useEffect(() => { onExitRef.current = onExit }, [onExit])
+  useEffect(() => { onEnterBlackHoleRef.current = onEnterBlackHole }, [onEnterBlackHole])
 
   const inputRef               = useFlightControls()
   const { ufoStateRef, update } = useUFOPhysics(inputRef)
@@ -769,7 +773,11 @@ export default function FlightMode({ onExit }: FlightModeProps) {
 
         if (!landingFired && inputRef.current.land && minDist < 6) {
           landingFired = true
-          onExitRef.current()
+          if (minLabel === 'M87*') {
+            onEnterBlackHoleRef.current()
+          } else {
+            onExitRef.current()
+          }
         }
       }
 
@@ -824,18 +832,35 @@ export default function FlightMode({ onExit }: FlightModeProps) {
     }
   }, []) // intentional: all refs are stable; isMobile is constant per mount
 
+  const nearestIsBlackHole = nearestPlanet?.name === 'M87*'
+
   return (
     <div ref={containerRef} style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}>
       <FlightHUD
         speed={speed}
         isBoosting={isBoosting}
-        nearestPlanet={nearestPlanet}
+        nearestPlanet={nearestIsBlackHole ? null : nearestPlanet}
         ufoX={ufoXY.x}
         ufoY={ufoXY.y}
         planetDots={planetDots}
         onExit={onExit}
         inputRef={inputRef}
       />
+      {nearestIsBlackHole && (
+        <div style={{
+          position: 'absolute', top: '1.5rem', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(26,0,48,0.7)', backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(139,92,246,0.5)', borderRadius: '12px',
+          padding: '0.6rem 1.2rem', color: '#c4b5fd', fontSize: '0.8rem',
+          textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
+          transition: 'opacity 0.3s',
+        }}>
+          <span style={{ opacity: 0.8 }}>M87* Event Horizon</span>
+          <span style={{ opacity: 0.5 }}> — Press </span>
+          <kbd style={{ background: 'rgba(196,181,253,0.1)', borderRadius: '4px', padding: '0 5px' }}>F</kbd>
+          <span style={{ opacity: 0.5 }}> to enter</span>
+        </div>
+      )}
       {import.meta.env.DEV && fps > 0 && (
         <div style={{
           position: 'fixed', top: '1rem', left: '50%', transform: 'translateX(-50%)',
