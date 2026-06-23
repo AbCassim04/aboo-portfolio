@@ -5,6 +5,170 @@ import { useUFOPhysics }     from '../hooks/useUFOPhysics'
 import FlightHUD             from '../components/FlightHUD'
 import type { PlanetDot }    from '../components/FlightHUD'
 
+// ── GLSL shaders ───────────────────────────────────────────────────────────
+
+const TWINKLE_VERT = `
+attribute float aSize;
+attribute float aPhase;
+uniform float uTime;
+varying float vAlpha;
+void main() {
+  float twinkle = sin(uTime * 2.0 + aPhase) * 0.3 + 0.7;
+  vAlpha = twinkle;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = aSize * (300.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}`
+
+const TWINKLE_FRAG = `
+varying float vAlpha;
+void main() {
+  float dist = length(gl_PointCoord - vec2(0.5));
+  if (dist > 0.5) discard;
+  float alpha = (1.0 - dist * 2.0) * vAlpha;
+  gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+}`
+
+const GLOW_VERT = `
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+void main() {
+  vNormal = normalize(normalMatrix * normal);
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  gl_Position = projectionMatrix * mvPosition;
+}`
+
+const GLOW_FRAG = `
+uniform vec3 uColor;
+uniform float uIntensity;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+void main() {
+  vec3 normal  = normalize(vNormal);
+  vec3 viewDir = normalize(vViewPosition);
+  float fresnel = pow(1.0 - abs(dot(normal, viewDir)), 3.0);
+  float glow    = fresnel * uIntensity;
+  gl_FragColor  = vec4(uColor, glow * 0.6);
+}`
+
+const NEBULA_VERT = `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position, 1.0);
+}`
+
+const NEBULA_FRAG = `
+uniform float uTime;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+varying vec2 vUv;
+vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i  = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g  = step(x0.yzx, x0.xyz);
+  vec3 l  = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute(permute(permute(
+    i.z + vec4(0.0, i1.z, i2.z, 1.0))
+    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3  ns = n_ * D.wyz - D.xzx;
+  vec4  j  = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4  x_ = floor(j * ns.z);
+  vec4  y_ = floor(j - 7.0 * x_);
+  vec4  x  = x_ * ns.x + ns.yyyy;
+  vec4  y  = y_ * ns.x + ns.yyyy;
+  vec4  h  = 1.0 - abs(x) - abs(y);
+  vec4 b0  = vec4(x.xy, y.xy);
+  vec4 b1  = vec4(x.zw, y.zw);
+  vec4 s0  = floor(b0)*2.0 + 1.0;
+  vec4 s1  = floor(b1)*2.0 + 1.0;
+  vec4 sh  = -step(h, vec4(0.0));
+  vec4 a0  = b0.xzyw + s0.xzyw*sh.xxyy;
+  vec4 a1  = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0  = vec3(a0.xy, h.x);
+  vec3 p1  = vec3(a0.zw, h.y);
+  vec3 p2  = vec3(a1.xy, h.z);
+  vec3 p3  = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float fbm(vec3 p) {
+  float val = 0.0; float amp = 0.5; float freq = 1.0;
+  for (int i = 0; i < 5; i++) { val += amp * snoise(p * freq); amp *= 0.5; freq *= 2.0; }
+  return val;
+}
+void main() {
+  vec2 uv = vUv - 0.5;
+  vec3 p1 = vec3(uv * 2.0,       uTime * 0.012);
+  vec3 p2 = vec3(uv * 4.0 + 0.3, uTime * 0.008);
+  vec3 p3 = vec3(uv * 1.0 - 0.5, uTime * 0.005);
+  float n1 = fbm(p1) * 0.5 + 0.5;
+  float n2 = fbm(p2) * 0.5 + 0.5;
+  float n3 = fbm(p3) * 0.5 + 0.5;
+  float cloud = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+  cloud = smoothstep(0.35, 0.75, cloud);
+  vec3 color = mix(uColor1, uColor2, n1);
+  color = mix(color, uColor3, n2 * 0.5);
+  float vignette = clamp(1.0 - length(uv) * 1.2, 0.0, 1.0);
+  gl_FragColor = vec4(color, cloud * 0.12 * vignette);
+}`
+
+function createNebulaBackground(): THREE.Mesh {
+  const geo  = new THREE.PlaneGeometry(2, 2)
+  const mat  = new THREE.ShaderMaterial({
+    vertexShader:   NEBULA_VERT,
+    fragmentShader: NEBULA_FRAG,
+    uniforms: {
+      uTime:   { value: 0 },
+      uColor1: { value: new THREE.Color('#2a0a4a') },
+      uColor2: { value: new THREE.Color('#0a1a3a') },
+      uColor3: { value: new THREE.Color('#1a0a2e') },
+    },
+    transparent: true,
+    depthWrite:  false,
+    depthTest:   false,
+    blending:    THREE.AdditiveBlending,
+  })
+  const mesh = new THREE.Mesh(geo, mat)
+  mesh.frustumCulled = false
+  mesh.renderOrder   = -1
+  return mesh
+}
+
+function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    vertexShader:   GLOW_VERT,
+    fragmentShader: GLOW_FRAG,
+    uniforms: {
+      uColor:     { value: color },
+      uIntensity: { value: intensity },
+    },
+    transparent: true,
+    depthWrite:  false,
+    side:        THREE.FrontSide,
+    blending:    THREE.AdditiveBlending,
+  })
+}
+
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
 const SPHERE_RADIUS      = 3.5
@@ -128,52 +292,77 @@ export default function FlightMode({ onExit }: FlightModeProps) {
     scene.add(rimLight)
 
     // ── 1. Main star field ─────────────────────────────────────────────────
-    const starCount = isMobile ? 150 : 600
-    const starVerts: number[] = []
+    const starCount  = isMobile ? 150 : 600
+    const starVerts:  number[] = []
+    const starSizes:  number[] = []
+    const starPhases: number[] = []
     for (let i = 0; i < starCount; i++) {
       const theta = Math.random() * Math.PI * 2
       const phi   = Math.acos(2 * Math.random() - 1)
       const r     = 40 + Math.random() * 40
       starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi))
+      starSizes.push(0.5 + Math.random() * 1.5)
+      starPhases.push(Math.random() * Math.PI * 2)
     }
     const starGeo = new THREE.BufferGeometry()
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3))
-    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.018, transparent: true, opacity: 0.8, sizeAttenuation: true })
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts,  3))
+    starGeo.setAttribute('aSize',    new THREE.Float32BufferAttribute(starSizes,  1))
+    starGeo.setAttribute('aPhase',   new THREE.Float32BufferAttribute(starPhases, 1))
+    const starMat = new THREE.ShaderMaterial({ vertexShader: TWINKLE_VERT, fragmentShader: TWINKLE_FRAG, uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false })
     const stars   = new THREE.Points(starGeo, starMat)
     scene.add(stars)
 
     // ── 2. Deep space stars ────────────────────────────────────────────────
-    const deepCount = isMobile ? 100 : 400
-    const deepVerts: number[] = []
+    const deepCount       = isMobile ? 100 : 400
+    const deepVerts:  number[] = []
+    const deepSizes:  number[] = []
+    const deepPhases: number[] = []
     for (let i = 0; i < deepCount; i++) {
       const theta  = Math.random() * Math.PI * 2
       const phi    = Math.acos(2 * Math.random() - 1)
       const r      = 30 + Math.random() * 30
       const zShift = -(10 + Math.random() * 40)
       deepVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi) + zShift)
+      deepSizes.push(0.5 + Math.random() * 1.5)
+      deepPhases.push(Math.random() * Math.PI * 2)
     }
     const deepStarGeo = new THREE.BufferGeometry()
-    deepStarGeo.setAttribute('position', new THREE.Float32BufferAttribute(deepVerts, 3))
-    const deepStarMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.018, transparent: true, opacity: 0.6, sizeAttenuation: true })
+    deepStarGeo.setAttribute('position', new THREE.Float32BufferAttribute(deepVerts,  3))
+    deepStarGeo.setAttribute('aSize',    new THREE.Float32BufferAttribute(deepSizes,  1))
+    deepStarGeo.setAttribute('aPhase',   new THREE.Float32BufferAttribute(deepPhases, 1))
+    const deepStarMat = new THREE.ShaderMaterial({ vertexShader: TWINKLE_VERT, fragmentShader: TWINKLE_FRAG, uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false })
     const deepStars   = new THREE.Points(deepStarGeo, deepStarMat)
     scene.add(deepStars)
 
-    // ── 3. Nebula planes ───────────────────────────────────────────────────
-    const nebulaGeo     = new THREE.PlaneGeometry(25, 25)
-    const nebulaConfigs = [
-      { color: 0x2a0a4a, opacity: 0.06, z:  -8.0, ry:  0.3 },
-      { color: 0x0a1a3a, opacity: 0.05, z: -20.0, ry: -0.5 },
-      { color: 0x1a0a2e, opacity: 0.07, z: -35.0, ry:  0.8 },
-    ]
-    const nebulaPlanes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial }[] = []
-    for (const nc of nebulaConfigs) {
-      const mat  = new THREE.MeshBasicMaterial({ color: nc.color, transparent: true, opacity: nc.opacity, side: THREE.DoubleSide, depthWrite: false })
-      const mesh = new THREE.Mesh(nebulaGeo, mat)
-      mesh.position.z = nc.z
-      mesh.rotation.y = nc.ry
-      mesh.rotation.z = Math.random() * Math.PI
-      scene.add(mesh)
-      nebulaPlanes.push({ mesh, mat })
+    // ── 3. Nebula ─────────────────────────────────────────────────────────
+    const nebulaPlanes:     THREE.Mesh[]                = []
+    const nebulaMobileMats: THREE.MeshBasicMaterial[]  = []
+    let nebulaBgGeo: THREE.BufferGeometry | null        = null
+    let nebulaBgMat: THREE.ShaderMaterial | null        = null
+
+    if (isMobile) {
+      const mobileNebulaConfigs = [
+        { color: 0x2a0a4a, opacity: 0.06, z:  -8.0, ry:  0.3 },
+        { color: 0x0a1a3a, opacity: 0.06, z: -20.0, ry: -0.5 },
+        { color: 0x1a0a2e, opacity: 0.06, z: -35.0, ry:  0.8 },
+      ]
+      const flatGeo = new THREE.PlaneGeometry(25, 25)
+      nebulaBgGeo = flatGeo
+      for (const nc of mobileNebulaConfigs) {
+        const mat  = new THREE.MeshBasicMaterial({ color: nc.color, transparent: true, opacity: nc.opacity, side: THREE.DoubleSide, depthWrite: false })
+        const mesh = new THREE.Mesh(flatGeo, mat)
+        mesh.position.z = nc.z
+        mesh.rotation.y = nc.ry
+        mesh.rotation.z = Math.random() * Math.PI
+        scene.add(mesh)
+        nebulaPlanes.push(mesh)
+        nebulaMobileMats.push(mat)
+      }
+    } else {
+      const nbg  = createNebulaBackground()
+      scene.add(nbg)
+      nebulaBgGeo = nbg.geometry
+      nebulaBgMat = nbg.material as THREE.ShaderMaterial
     }
 
     // ── 4. Neural network constellation ────────────────────────────────────
@@ -287,13 +476,16 @@ export default function FlightMode({ onExit }: FlightModeProps) {
     }
 
     // ── 8. Wireframe destinations ──────────────────────────────────────────
-    const destGroups:    THREE.Group[]          = []
-    const destOriginalY: number[]               = []
-    const destLabels:    THREE.Mesh[]           = []
-    const destAllGeos:   THREE.BufferGeometry[] = []
-    const destAllMats:   THREE.Material[]       = []
-    const destTextures:  THREE.CanvasTexture[]  = []
-    const destLabelGeo   = new THREE.PlaneGeometry(4, 1.0)
+    const destGroups:     THREE.Group[]          = []
+    const destOriginalY:  number[]               = []
+    const destLabels:     THREE.Mesh[]           = []
+    const destAllGeos:    THREE.BufferGeometry[] = []
+    const destAllMats:    THREE.Material[]       = []
+    const destTextures:   THREE.CanvasTexture[]  = []
+    const destGlowGeos:   THREE.BufferGeometry[] = []
+    const destGlowMats:   THREE.ShaderMaterial[] = []
+    const destGlowMeshes: THREE.Mesh[]           = []
+    const destLabelGeo    = new THREE.PlaneGeometry(4, 1.0)
 
     for (let i = 0; i < DESTINATIONS.length; i++) {
       const cfg   = DESTINATIONS[i]
@@ -327,6 +519,16 @@ export default function FlightMode({ onExit }: FlightModeProps) {
       const pLight = new THREE.PointLight(cfg.color, 0.5, 10)
       pLight.position.set(...cfg.pos)
       scene.add(pLight)
+
+      // Atmospheric glow aura (1.3× size, Fresnel shader, world-space — no rotation)
+      const glowGeo  = createGeometry(cfg.shape, cfg.size * 1.3)
+      const glowMat  = createGlowMaterial(new THREE.Color(cfg.color), isMobile ? 0.7 : 1.2)
+      const glowMesh = new THREE.Mesh(glowGeo, glowMat)
+      glowMesh.position.set(...cfg.pos)
+      scene.add(glowMesh)
+      destGlowGeos.push(glowGeo)
+      destGlowMats.push(glowMat)
+      destGlowMeshes.push(glowMesh)
 
       scene.add(group)
       destGroups.push(group)
@@ -447,8 +649,11 @@ export default function FlightMode({ onExit }: FlightModeProps) {
       stars.rotation.y     += 0.00008
       stars.rotation.x     += 0.00004
       deepStars.rotation.y += 0.00006
+      starMat.uniforms['uTime'].value     = t
+      deepStarMat.uniforms['uTime'].value = t
 
-      for (const { mesh } of nebulaPlanes) mesh.rotation.z += 0.0003
+      if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
+      for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003
 
       nodeGroup.rotation.y += 0.003
       nodeGroup.rotation.x  = Math.sin(t * 0.3) * 0.12
@@ -511,7 +716,8 @@ export default function FlightMode({ onExit }: FlightModeProps) {
         g.rotation.z += 0.003
         g.position.y = destOriginalY[i] + Math.sin(t * 0.5 + i) * 0.2
         g.scale.setScalar(1 + Math.sin(t * 0.8 + i) * 0.03)
-        destLabels[i].position.y = g.position.y + DESTINATIONS[i].size + 1.5
+        destLabels[i].position.y    = g.position.y + DESTINATIONS[i].size + 1.5
+        destGlowMeshes[i].position.y = g.position.y
       }
       for (const label of destLabels) {
         label.lookAt(camera.position)
@@ -588,11 +794,13 @@ export default function FlightMode({ onExit }: FlightModeProps) {
       for (const m of destAllMats) m.dispose()
       destLabelGeo.dispose()
       for (const tx of destTextures) tx.dispose()
+      for (const g of destGlowGeos) g.dispose()
+      for (const m of destGlowMats) m.dispose()
 
       starGeo.dispose();     starMat.dispose()
       deepStarGeo.dispose(); deepStarMat.dispose()
-      nebulaGeo.dispose()
-      for (const { mat } of nebulaPlanes) mat.dispose()
+      nebulaBgGeo?.dispose(); nebulaBgMat?.dispose()
+      for (const m of nebulaMobileMats) m.dispose()
       nodeGeo.dispose(); lineGeo.dispose(); lineMat.dispose()
       for (const m of nodeMats) m.dispose()
       for (const g of dustGeos) g.dispose()
