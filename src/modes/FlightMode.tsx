@@ -234,13 +234,14 @@ function makeDestLabel(text: string, hexColor: number): THREE.CanvasTexture {
 }
 
 // Earth textures: bobbyroe/threejs-earth (MIT)
-function createEarth(loader: THREE.TextureLoader): {
+function createEarth(loader: THREE.TextureLoader, isMobile: boolean): {
   group:     THREE.Group
   earthMesh: THREE.Mesh
   cloudMesh: THREE.Mesh
   dispose:   () => void
 } {
   const group = new THREE.Group()
+  const INNER_SEGS = isMobile ? 32 : 64
 
   const base      = import.meta.env.BASE_URL
   const dayTex    = loader.load(base + 'earth/earth-day.jpg')
@@ -251,7 +252,7 @@ function createEarth(loader: THREE.TextureLoader): {
   nightTex.colorSpace = THREE.SRGBColorSpace
   cloudTex.colorSpace = THREE.SRGBColorSpace
 
-  const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64)
+  const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, INNER_SEGS, INNER_SEGS)
   const earthMat = new THREE.MeshPhongMaterial({
     map:               dayTex,
     emissiveMap:       nightTex,
@@ -264,7 +265,7 @@ function createEarth(loader: THREE.TextureLoader): {
   const earthMesh = new THREE.Mesh(earthGeo, earthMat)
   group.add(earthMesh)
 
-  const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.5, 64, 64)
+  const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.5, INNER_SEGS, INNER_SEGS)
   const cloudMat = new THREE.MeshPhongMaterial({
     map:         cloudTex,
     transparent: true,
@@ -275,7 +276,7 @@ function createEarth(loader: THREE.TextureLoader): {
   const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
   group.add(cloudMesh)
 
-  const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS + 1, 64, 64)
+  const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS + 1, INNER_SEGS, INNER_SEGS)
   const atmoMat = new THREE.ShaderMaterial({
     vertexShader: `
       varying vec3 vNormal;
@@ -312,12 +313,13 @@ function createEarth(loader: THREE.TextureLoader): {
   }
 }
 
-function createMoon(loader: THREE.TextureLoader): { mesh: THREE.Mesh; dispose: () => void } {
+function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THREE.Mesh; dispose: () => void } {
   const base    = import.meta.env.BASE_URL
   const moonTex = loader.load(base + 'earth/8k_moon.jpg')
   moonTex.colorSpace = THREE.SRGBColorSpace
+  const INNER_SEGS = isMobile ? 32 : 64
 
-  const moonGeo = new THREE.SphereGeometry(MOON_RADIUS, 64, 64)
+  const moonGeo = new THREE.SphereGeometry(MOON_RADIUS, INNER_SEGS, INNER_SEGS)
   const moonMat = new THREE.MeshPhongMaterial({
     map:       moonTex,
     shininess: 5,
@@ -330,12 +332,13 @@ function createMoon(loader: THREE.TextureLoader): { mesh: THREE.Mesh; dispose: (
   }
 }
 
-function createMercury(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createMercury(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base       = import.meta.env.BASE_URL
   const mercuryTex = loader.load(base + 'earth/8k_mercury.jpg')
   mercuryTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const mercuryGeo = new THREE.SphereGeometry(4, 64, 64)
+  const INNER_SEGS = isMobile ? 32 : 64
+  const mercuryGeo = new THREE.SphereGeometry(4, INNER_SEGS, INNER_SEGS)
   const mercuryMat = new THREE.MeshPhongMaterial({ map: mercuryTex, shininess: 5, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(mercuryGeo, mercuryMat)
   group.add(mesh)
@@ -343,18 +346,19 @@ function createMercury(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   return { group, mesh, dispose: () => { mercuryGeo.dispose(); mercuryMat.dispose(); mercuryTex.dispose() } }
 }
 
-function createVenus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; atmoMesh: THREE.Mesh; dispose: () => void } {
+function createVenus(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; atmoMesh: THREE.Mesh; dispose: () => void } {
   const base     = import.meta.env.BASE_URL
   const venusTex = loader.load(base + 'earth/8k_venus_surface.jpg')
   const atmoTex  = loader.load(base + 'earth/4k_venus_atmosphere.jpg')
   venusTex.colorSpace = THREE.SRGBColorSpace
   atmoTex.colorSpace  = THREE.SRGBColorSpace
   const group    = new THREE.Group()
-  const venusGeo = new THREE.SphereGeometry(9, 64, 64)
+  const INNER_SEGS = isMobile ? 32 : 64
+  const venusGeo = new THREE.SphereGeometry(9, INNER_SEGS, INNER_SEGS)
   const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh     = new THREE.Mesh(venusGeo, venusMat)
   group.add(mesh)
-  const atmoGeo  = new THREE.SphereGeometry(9.8, 64, 64)
+  const atmoGeo  = new THREE.SphereGeometry(9.8, INNER_SEGS, INNER_SEGS)
   const atmoMat  = new THREE.MeshPhongMaterial({ map: atmoTex, shininess: 3, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
   const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
   group.add(atmoMesh)
@@ -362,12 +366,13 @@ function createVenus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: T
   return { group, mesh, atmoMesh, dispose: () => { venusGeo.dispose(); venusMat.dispose(); atmoGeo.dispose(); atmoMat.dispose(); venusTex.dispose(); atmoTex.dispose() } }
 }
 
-function createMars(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createMars(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base    = import.meta.env.BASE_URL
   const marsTex = loader.load(base + 'earth/8k_mars.jpg')
   marsTex.colorSpace = THREE.SRGBColorSpace
   const group   = new THREE.Group()
-  const marsGeo = new THREE.SphereGeometry(7, 64, 64)
+  const INNER_SEGS = isMobile ? 32 : 64
+  const marsGeo = new THREE.SphereGeometry(7, INNER_SEGS, INNER_SEGS)
   const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.DoubleSide })
   const mesh    = new THREE.Mesh(marsGeo, marsMat)
   group.add(mesh)
@@ -375,12 +380,13 @@ function createMars(loader: THREE.TextureLoader): { group: THREE.Group; mesh: TH
   return { group, mesh, dispose: () => { marsGeo.dispose(); marsMat.dispose(); marsTex.dispose() } }
 }
 
-function createJupiter(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createJupiter(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base       = import.meta.env.BASE_URL
   const jupiterTex = loader.load(base + 'earth/8k_jupiter.jpg')
   jupiterTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const jupiterGeo = new THREE.SphereGeometry(110, 64, 64)
+  const OUTER_SEGS = isMobile ? 16 : 32
+  const jupiterGeo = new THREE.SphereGeometry(110, OUTER_SEGS, OUTER_SEGS)
   const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
   group.add(mesh)
@@ -388,19 +394,21 @@ function createJupiter(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   return { group, mesh, dispose: () => { jupiterGeo.dispose(); jupiterMat.dispose(); jupiterTex.dispose() } }
 }
 
-function createSaturn(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createSaturn(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base      = import.meta.env.BASE_URL
   const saturnTex = loader.load(base + 'earth/8k_saturn.jpg')
   const ringTex   = loader.load(base + 'earth/8k_saturn_ring_alpha.png')
   saturnTex.colorSpace = THREE.SRGBColorSpace
   ringTex.colorSpace   = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const saturnGeo = new THREE.SphereGeometry(90, 64, 64)
+  const OUTER_SEGS = isMobile ? 16 : 32
+  const RING_SEGS  = isMobile ? 64 : 128
+  const saturnGeo = new THREE.SphereGeometry(90, OUTER_SEGS, OUTER_SEGS)
   const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
   group.add(mesh)
   const ringInner = 117, ringOuter = 216
-  const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, 128)
+  const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, RING_SEGS)
   const pos = ringGeo.attributes.position as THREE.BufferAttribute
   const uv  = ringGeo.attributes.uv as THREE.BufferAttribute
   for (let i = 0; i < pos.count; i++) {
@@ -415,12 +423,13 @@ function createSaturn(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   return { group, mesh, dispose: () => { saturnGeo.dispose(); saturnMat.dispose(); ringGeo.dispose(); ringMat.dispose(); saturnTex.dispose(); ringTex.dispose() } }
 }
 
-function createUranus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createUranus(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base      = import.meta.env.BASE_URL
   const uranusTex = loader.load(base + 'earth/2k_uranus.jpg')
   uranusTex.colorSpace = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const uranusGeo = new THREE.SphereGeometry(40, 64, 64)
+  const OUTER_SEGS = isMobile ? 16 : 32
+  const uranusGeo = new THREE.SphereGeometry(40, OUTER_SEGS, OUTER_SEGS)
   const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
   group.add(mesh)
@@ -428,12 +437,13 @@ function createUranus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   return { group, mesh, dispose: () => { uranusGeo.dispose(); uranusMat.dispose(); uranusTex.dispose() } }
 }
 
-function createNeptune(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+function createNeptune(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
   const base       = import.meta.env.BASE_URL
   const neptuneTex = loader.load(base + 'earth/2k_neptune.jpg')
   neptuneTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const neptuneGeo = new THREE.SphereGeometry(38, 64, 64)
+  const OUTER_SEGS = isMobile ? 16 : 32
+  const neptuneGeo = new THREE.SphereGeometry(38, OUTER_SEGS, OUTER_SEGS)
   const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
   group.add(mesh)
@@ -647,21 +657,25 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const base      = import.meta.env.BASE_URL
     const skyLoader = new THREE.TextureLoader()
 
+    const SKY_SEGS = isMobile ? 16 : 32
+
     const milkyTex  = skyLoader.load(base + 'stars/8k_stars_milky_way.jpg')
     milkyTex.colorSpace = THREE.SRGBColorSpace
-    const milkyGeo  = new THREE.SphereGeometry(1600, 64, 64)
+    const milkyGeo  = new THREE.SphereGeometry(1600, SKY_SEGS, SKY_SEGS)
     const milkyMat  = new THREE.MeshBasicMaterial({ map: milkyTex, side: THREE.BackSide, transparent: true, opacity: 0.9 })
     const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat)
     scene.add(milkyMesh)
 
     const hippTex  = skyLoader.load(base + 'stars/hipp8.jpg')
-    const hippGeo  = new THREE.SphereGeometry(1700, 64, 64)
+    const hippGeo  = new THREE.SphereGeometry(1700, SKY_SEGS, SKY_SEGS)
     const hippMat  = new THREE.MeshBasicMaterial({ map: hippTex, side: THREE.BackSide, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
     const hippMesh = new THREE.Mesh(hippGeo, hippMat)
-    scene.add(hippMesh)
+    if (!isMobile) {
+      scene.add(hippMesh)
+    }
 
     const tychoTex  = skyLoader.load(base + 'stars/tycho8.jpg')
-    const tychoGeo  = new THREE.SphereGeometry(1800, 64, 64)
+    const tychoGeo  = new THREE.SphereGeometry(1800, SKY_SEGS, SKY_SEGS)
     const tychoMat  = new THREE.MeshBasicMaterial({ map: tychoTex, side: THREE.BackSide, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
     const tychoMesh = new THREE.Mesh(tychoGeo, tychoMat)
     scene.add(tychoMesh)
@@ -935,10 +949,10 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     scene.add(new THREE.Mesh(boundGeo, boundMat))
 
     // ── 12. Earth (decorative) ────────────────────────────────────────────
-    const earthObj = createEarth(sharedLoader)
+    const earthObj = createEarth(sharedLoader, isMobile)
     scene.add(earthObj.group)
 
-    const moonObj = createMoon(sharedLoader)
+    const moonObj = createMoon(sharedLoader, isMobile)
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
@@ -954,15 +968,17 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     let jwstGroup:   THREE.Group | null = null
     let jwstAngle    = 0
     let jwstDispose: (() => void) | null = null
-    createJWST().then(({ group, dispose }) => {
-      jwstGroup   = group
-      jwstDispose = dispose
-      scene.add(jwstGroup)
-    })
+    if (!isMobile) {
+      createJWST().then(({ group, dispose }) => {
+        jwstGroup   = group
+        jwstDispose = dispose
+        scene.add(jwstGroup)
+      })
+    }
 
     let scifiGroup:   THREE.Group | null = null
     let scifiDispose: (() => void) | null = null
-    createScifiStation().then(({ group, dispose }) => {
+    if (!isMobile) { createScifiStation().then(({ group, dispose }) => {
       scifiGroup   = group
       scifiDispose = dispose
       scene.add(scifiGroup)
@@ -978,34 +994,34 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       stationLight2.position.y += 20
       scene.add(stationLight2)
       scifiGroup.userData.light2 = stationLight2
-    })
+    }) }
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
-    const mercuryObj = createMercury(sharedLoader)
+    const mercuryObj = createMercury(sharedLoader, isMobile)
     mercuryObj.group.position.set(-900, 0, 20)
     scene.add(mercuryObj.group)
 
-    const venusObj = createVenus(sharedLoader)
+    const venusObj = createVenus(sharedLoader, isMobile)
     venusObj.group.position.set(-650, 0, -30)
     scene.add(venusObj.group)
 
-    const marsObj = createMars(sharedLoader)
+    const marsObj = createMars(sharedLoader, isMobile)
     marsObj.group.position.set(300, 0, 20)
     scene.add(marsObj.group)
 
-    const jupiterObj = createJupiter(sharedLoader)
+    const jupiterObj = createJupiter(sharedLoader, isMobile)
     jupiterObj.group.position.set(800, 0, -40)
     scene.add(jupiterObj.group)
 
-    const saturnObj = createSaturn(sharedLoader)
+    const saturnObj = createSaturn(sharedLoader, isMobile)
     saturnObj.group.position.set(1400, 0, 30)
     scene.add(saturnObj.group)
 
-    const uranusObj = createUranus(sharedLoader)
+    const uranusObj = createUranus(sharedLoader, isMobile)
     uranusObj.group.position.set(1900, 0, -20)
     scene.add(uranusObj.group)
 
-    const neptuneObj = createNeptune(sharedLoader)
+    const neptuneObj = createNeptune(sharedLoader, isMobile)
     neptuneObj.group.position.set(2300, 0, 10)
     scene.add(neptuneObj.group)
 
@@ -1017,7 +1033,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     sunMesh.position.set(-1200, 0, 0)
     scene.add(sunMesh)
 
-    const coronaGeo = new THREE.SphereGeometry(92, 32, 32)
+    const SUN_SEGS = isMobile ? 16 : 32
+    const coronaGeo = new THREE.SphereGeometry(92, SUN_SEGS, SUN_SEGS)
     const coronaMat = new THREE.MeshBasicMaterial({
       color:       0xff9900,
       transparent: true,
@@ -1029,7 +1046,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     coronaGeo.translate(-1200, 0, 0)
     scene.add(new THREE.Mesh(coronaGeo, coronaMat))
 
-    const sunGlowGeo = new THREE.SphereGeometry(100, 32, 32)
+    const sunGlowGeo = new THREE.SphereGeometry(100, SUN_SEGS, SUN_SEGS)
     const sunGlowMat = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
@@ -1127,7 +1144,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
       for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003
       milkyMesh.rotation.y += 0.00002
-      hippMesh.rotation.y  += 0.000015
+      if (!isMobile) hippMesh.rotation.y += 0.000015
       tychoMesh.rotation.y += 0.00001
 
       nodeGroup.rotation.y += 0.003
