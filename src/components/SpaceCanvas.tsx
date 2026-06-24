@@ -1,30 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { CameraTransitionState } from '../hooks/useCameraNavigation'
+import LoadingScreen from './LoadingScreen'
 
 // ── GLSL shaders ───────────────────────────────────────────────────────────
-
-const TWINKLE_VERT = `
-attribute float aSize;
-attribute float aPhase;
-uniform float uTime;
-varying float vAlpha;
-void main() {
-  float twinkle = sin(uTime * 2.0 + aPhase) * 0.3 + 0.7;
-  vAlpha = twinkle;
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = aSize * (300.0 / -mvPosition.z);
-  gl_Position = projectionMatrix * mvPosition;
-}`
-
-const TWINKLE_FRAG = `
-varying float vAlpha;
-void main() {
-  float dist = length(gl_PointCoord - vec2(0.5));
-  if (dist > 0.5) discard;
-  float alpha = (1.0 - dist * 2.0) * vAlpha;
-  gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
-}`
 
 const GLOW_VERT = `
 varying vec3 vNormal;
@@ -166,6 +145,73 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
   })
 }
 
+// ── Earth / Moon ───────────────────────────────────────────────────────────
+
+const HUB_EARTH_RADIUS      = 30
+const HUB_EARTH_POS         = new THREE.Vector3(-80, -20, -120)
+const HUB_MOON_RADIUS       = 7
+const HUB_MOON_ORBIT_RADIUS = 60
+const HUB_MOON_ORBIT_SPEED  = 0.0003
+
+function createEarth(loader: THREE.TextureLoader): { group: THREE.Group; earthMesh: THREE.Mesh; cloudMesh: THREE.Mesh; dispose: () => void } {
+  const group = new THREE.Group()
+  const base  = import.meta.env.BASE_URL
+
+  const dayTex   = loader.load(base + 'earth/earth-day.jpg')
+  const cloudTex = loader.load(base + 'earth/earth-clouds.jpg')
+  dayTex.colorSpace   = THREE.SRGBColorSpace
+  cloudTex.colorSpace = THREE.SRGBColorSpace
+
+  const earthGeo = new THREE.SphereGeometry(HUB_EARTH_RADIUS, 64, 64)
+  const earthMat = new THREE.MeshBasicMaterial({ map: dayTex, side: THREE.DoubleSide, transparent: false, depthWrite: true })
+  const earthMesh = new THREE.Mesh(earthGeo, earthMat)
+  group.add(earthMesh)
+
+  const cloudGeo = new THREE.SphereGeometry(HUB_EARTH_RADIUS + 0.5, 64, 64)
+  const cloudMat = new THREE.MeshBasicMaterial({ map: cloudTex, side: THREE.DoubleSide, transparent: true, opacity: 0.35, depthWrite: false })
+  const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
+  group.add(cloudMesh)
+
+  const atmoGeo = new THREE.SphereGeometry(HUB_EARTH_RADIUS + 2, 64, 64)
+  const atmoMat = new THREE.ShaderMaterial({
+    vertexShader:   `varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `varying vec3 vNormal; void main() { float i = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0); gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * i; }`,
+    side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+  })
+  group.add(new THREE.Mesh(atmoGeo, atmoMat))
+
+  group.position.copy(HUB_EARTH_POS)
+  group.rotation.z = 0.4101
+
+  return {
+    group, earthMesh, cloudMesh,
+    dispose: () => {
+      earthGeo.dispose(); earthMat.dispose()
+      cloudGeo.dispose(); cloudMat.dispose()
+      atmoGeo.dispose();  atmoMat.dispose()
+      dayTex.dispose();   cloudTex.dispose()
+    },
+  }
+}
+
+function createMoon(loader: THREE.TextureLoader): { mesh: THREE.Mesh; dispose: () => void } {
+  const base    = import.meta.env.BASE_URL
+  const moonTex = loader.load(base + 'earth/8k_moon.jpg')
+  moonTex.colorSpace = THREE.SRGBColorSpace
+
+  const moonGeo = new THREE.SphereGeometry(HUB_MOON_RADIUS, 64, 64)
+  const moonMat = new THREE.MeshPhongMaterial({
+    map:       moonTex,
+    shininess: 5,
+    side:      THREE.DoubleSide,
+  })
+  const mesh = new THREE.Mesh(moonGeo, moonMat)
+  return {
+    mesh,
+    dispose: () => { moonGeo.dispose(); moonMat.dispose(); moonTex.dispose() },
+  }
+}
+
 // ── Scene constants ────────────────────────────────────────────────────────
 
 const NODE_COUNT_DESKTOP = 80
@@ -238,6 +284,8 @@ export interface SpaceCanvasProps {
 
 export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionComplete }: SpaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [loadProgress, setLoadProgress] = useState(0)
+  const [loadDone,     setLoadDone]     = useState(false)
 
   // Keep mutable refs in sync so animation loop always reads latest values
   const currentZoneRef = useRef(currentZone)
@@ -251,11 +299,17 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
 
     const isMobile = window.innerWidth < 768
 
+    const loadingManager = new THREE.LoadingManager(
+      () => setLoadDone(true),
+      (_url, loaded, total) => setLoadProgress((loaded / total) * 100),
+    )
+    const sharedLoader = new THREE.TextureLoader(loadingManager)
+
     // ── Scene & Camera ─────────────────────────────────────────────────────
     const scene  = new THREE.Scene()
     const w = container.clientWidth
     const h = container.clientHeight
-    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 500)
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000)
     camera.position.set(0, 0, 18)
     camera.lookAt(0, 0, 0)
 
@@ -266,54 +320,23 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     renderer.setClearColor(0x000000, 0)
     container.appendChild(renderer.domElement)
 
-    // ── 1. MAIN STAR FIELD ──────────────────────────────────────────────────
-    const starCount  = isMobile ? 150 : 600
-    const starVerts:  number[] = []
-    const starSizes:  number[] = []
-    const starPhases: number[] = []
-    for (let i = 0; i < starCount; i++) {
-      const theta = Math.random() * Math.PI * 2
-      const phi   = Math.acos(2 * Math.random() - 1)
-      const r     = 40 + Math.random() * 40
-      starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi))
-      starSizes.push(0.5 + Math.random() * 1.5)
-      starPhases.push(Math.random() * Math.PI * 2)
-    }
-    const starGeo = new THREE.BufferGeometry()
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts,  3))
-    starGeo.setAttribute('aSize',    new THREE.Float32BufferAttribute(starSizes,  1))
-    starGeo.setAttribute('aPhase',   new THREE.Float32BufferAttribute(starPhases, 1))
-    const starMat = new THREE.ShaderMaterial({ vertexShader: TWINKLE_VERT, fragmentShader: TWINKLE_FRAG, uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false })
-    const stars   = new THREE.Points(starGeo, starMat)
-    scene.add(stars)
+    // ── 1. SKYBOX ────────────────────────────────────────────────────────────
+    const base = import.meta.env.BASE_URL
 
-    // ── 2. DEEP SPACE STARS ─────────────────────────────────────────────────
-    const deepStarCount  = isMobile ? 100 : 400
-    const deepStarVerts:  number[] = []
-    const deepStarSizes:  number[] = []
-    const deepStarPhases: number[] = []
-    for (let i = 0; i < deepStarCount; i++) {
-      const theta  = Math.random() * Math.PI * 2
-      const phi    = Math.acos(2 * Math.random() - 1)
-      const r      = 30 + Math.random() * 30
-      const zShift = -(10 + Math.random() * 40)
-      deepStarVerts.push(
-        r * Math.sin(phi) * Math.cos(theta),
-        r * Math.sin(phi) * Math.sin(theta),
-        r * Math.cos(phi) + zShift,
-      )
-      deepStarSizes.push(0.5 + Math.random() * 1.5)
-      deepStarPhases.push(Math.random() * Math.PI * 2)
-    }
-    const deepStarGeo = new THREE.BufferGeometry()
-    deepStarGeo.setAttribute('position', new THREE.Float32BufferAttribute(deepStarVerts,  3))
-    deepStarGeo.setAttribute('aSize',    new THREE.Float32BufferAttribute(deepStarSizes,  1))
-    deepStarGeo.setAttribute('aPhase',   new THREE.Float32BufferAttribute(deepStarPhases, 1))
-    const deepStarMat = new THREE.ShaderMaterial({ vertexShader: TWINKLE_VERT, fragmentShader: TWINKLE_FRAG, uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false })
-    const deepStars   = new THREE.Points(deepStarGeo, deepStarMat)
-    scene.add(deepStars)
+    const starsTex = sharedLoader.load(base + 'stars/8k_stars.jpg')
+    const skyGeo1  = new THREE.SphereGeometry(1800, 64, 64)
+    const skyMat1  = new THREE.MeshBasicMaterial({ map: starsTex, side: THREE.BackSide })
+    scene.add(new THREE.Mesh(skyGeo1, skyMat1))
 
-    // ── 3. NEBULA ────────────────────────────────────────────────────────────
+    const milkyTex = sharedLoader.load(base + 'stars/8k_stars_milky_way.jpg')
+    const skyGeo2  = new THREE.SphereGeometry(1700, 64, 64)
+    const skyMat2  = new THREE.MeshBasicMaterial({
+      map: milkyTex, side: THREE.BackSide, transparent: true,
+      opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
+    })
+    scene.add(new THREE.Mesh(skyGeo2, skyMat2))
+
+    // ── 2. NEBULA ────────────────────────────────────────────────────────────
     const nebulaPlanes:    THREE.Mesh[]                  = []
     const nebulaMobileMats: THREE.MeshBasicMaterial[]   = []
     let nebulaBgGeo: THREE.BufferGeometry | null         = null
@@ -567,6 +590,41 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       markerTextures.push(texture)
     }
 
+    // ── 10. Earth (decorative) ───────────────────────────────────────────────
+    const earthObj = createEarth(sharedLoader)
+    scene.add(earthObj.group)
+
+    const moonObj = createMoon(sharedLoader)
+    scene.add(moonObj.mesh)
+    let moonAngle = 0
+
+    // ── 11. Sun ───────────────────────────────────────────────────────────────
+    const sunTex      = sharedLoader.load(base + 'stars/8k_sun.jpg')
+    const sunGeo      = new THREE.SphereGeometry(18, 64, 64)
+    const sunMat      = new THREE.MeshBasicMaterial({ map: sunTex })
+    const sunMesh     = new THREE.Mesh(sunGeo, sunMat)
+    sunMesh.position.set(400, 100, 300)
+    scene.add(sunMesh)
+
+    const sunGlowGeo  = new THREE.SphereGeometry(22, 32, 32)
+    const sunGlowMat  = new THREE.MeshBasicMaterial({
+      color:       0xffffaa,
+      transparent: true,
+      opacity:     0.15,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
+    sunGlowMesh.position.set(400, 100, 300)
+    scene.add(sunGlowMesh)
+
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.0)
+    sunLight.position.set(400, 100, 300)
+    sunLight.target.position.set(0, 0, 0)
+    scene.add(sunLight)
+    scene.add(sunLight.target)
+
     // ── Resize ──────────────────────────────────────────────────────────────
     const onResize = () => {
       const rw = container.clientWidth
@@ -627,13 +685,6 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
         camera.position.set(base[0], base[1] + Math.sin(t * 0.5) * 0.1, base[2])
         camera.lookAt(camState.to.lookAt[0], camState.to.lookAt[1], camState.to.lookAt[2])
       }
-
-      // ── Stars ─────────────────────────────────────────────────────────────
-      stars.rotation.y     += 0.00008
-      stars.rotation.x     += 0.00004
-      deepStars.rotation.y += 0.00006
-      starMat.uniforms['uTime'].value     = t
-      deepStarMat.uniforms['uTime'].value = t
 
       // ── Nebula ────────────────────────────────────────────────────────────
       if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
@@ -697,6 +748,18 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
         }
       }
 
+      // ── Earth, Moon & Sun ─────────────────────────────────────────────────
+      earthObj.earthMesh.rotation.y += 0.0003
+      earthObj.cloudMesh.rotation.y += 0.0005
+      sunMesh.rotation.y            += 0.0001
+      moonAngle += HUB_MOON_ORBIT_SPEED
+      moonObj.mesh.position.set(
+        HUB_EARTH_POS.x + Math.cos(moonAngle) * HUB_MOON_ORBIT_RADIUS,
+        HUB_EARTH_POS.y + Math.sin(moonAngle * 0.2) * 8,
+        HUB_EARTH_POS.z + Math.sin(moonAngle) * HUB_MOON_ORBIT_RADIUS,
+      )
+      moonObj.mesh.rotation.y += 0.0002
+
       renderer.render(scene, camera)
     }
     animate()
@@ -716,8 +779,8 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
       renderer.dispose()
 
-      starGeo.dispose(); starMat.dispose()
-      deepStarGeo.dispose(); deepStarMat.dispose()
+      skyGeo1.dispose(); skyMat1.dispose(); starsTex.dispose()
+      skyGeo2.dispose(); skyMat2.dispose(); milkyTex.dispose()
       nebulaBgGeo?.dispose(); nebulaBgMat?.dispose()
       for (const m of nebulaMobileMats) m.dispose()
       nodeGeo.dispose(); lineGeo.dispose(); lineMat.dispose()
@@ -741,13 +804,20 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       sharedLabelGeo.dispose()
       for (const m of markerLabelMats) m.dispose()
       for (const tx of markerTextures) tx.dispose()
+      earthObj.dispose()
+      moonObj.dispose()
+      sunGeo.dispose(); sunMat.dispose(); sunTex.dispose()
+      sunGlowGeo.dispose(); sunGlowMat.dispose()
     }
   }, [cameraStateRef])
 
   return (
-    <div
-      ref={containerRef}
-      style={{ position: 'fixed', inset: 0, width: '100%', height: '100vh', zIndex: 0 }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        style={{ position: 'fixed', inset: 0, width: '100%', height: '100vh', zIndex: 0 }}
+      />
+      <LoadingScreen progress={loadProgress} done={loadDone} />
+    </>
   )
 }

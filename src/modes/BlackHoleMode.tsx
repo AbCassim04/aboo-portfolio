@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import * as bhRenderer from '../blackhole/renderer'
+import LoadingScreen from '../components/LoadingScreen'
 
 interface BlackHoleModeProps {
   onExit: () => void
@@ -37,30 +38,8 @@ export default function BlackHoleMode({ onExit }: BlackHoleModeProps) {
         height={window.innerHeight}
       />
 
-      {/* Loading vignette */}
-      <AnimatePresence>
-        {!ready && (
-          <motion.div
-            key="loading"
-            initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.0 }}
-            style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#000',
-            }}
-          >
-            <motion.p
-              animate={{ opacity: [0.3, 1, 0.3] }}
-              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ color: '#6b21a8', fontFamily: 'monospace', fontSize: '0.85rem', letterSpacing: '0.2em' }}
-            >
-              APPROACHING M87*
-            </motion.p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Loading screen */}
+      <LoadingScreen progress={ready ? 100 : 0} done={ready} />
 
       {/* Exit button */}
       <AnimatePresence>

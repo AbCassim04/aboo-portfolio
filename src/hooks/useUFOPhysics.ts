@@ -68,13 +68,13 @@ export function useUFOPhysics(
     state.rotation.y += state.angularVelocity.y
     state.rotation.z += state.angularVelocity.z
 
-    // Soft boundary pull at 28u, hard clamp at 30u
+    // Soft boundary pull at 230u, hard clamp at 250u
     const dist = state.position.length()
-    if (dist > 28) {
+    if (dist > 230) {
       _pull.copy(state.position).normalize().multiplyScalar(-0.012)
       state.velocity.add(_pull)
     }
-    if (dist > 30) state.position.normalize().multiplyScalar(30)
+    if (dist > 250) state.position.normalize().multiplyScalar(250)
   }
 
   return { ufoStateRef, update }
