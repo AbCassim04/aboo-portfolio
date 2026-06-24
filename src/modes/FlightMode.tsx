@@ -160,6 +160,12 @@ const MOON_ORBIT_SPEED   = 0.003
 const ISS_ORBIT_RADIUS   = 22
 const ISS_ORBIT_SPEED    = 0.0008
 const ISS_SCALE          = 0.1
+const JWST_ORBIT_RADIUS  = 30
+const JWST_ORBIT_SPEED   = 0.0003
+const JWST_SCALE         = 0.08
+const SCIFI_ORBIT_RADIUS = 100
+const SCIFI_ORBIT_SPEED  = 0.0001
+const SCIFI_SCALE        = 3.0
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -477,6 +483,94 @@ function createISS(): Promise<{ group: THREE.Group; dispose: () => void }> {
       },
       (progress) => { console.log('ISS loading:', progress.loaded, '/', progress.total) },
       (error)    => { console.error('❌ ISS failed to load', error); reject(error) },
+    )
+  })
+}
+
+function createJWST(): Promise<{ group: THREE.Group; dispose: () => void }> {
+  return new Promise((resolve, reject) => {
+    const base        = import.meta.env.BASE_URL
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
+    const loader = new GLTFLoader()
+    loader.setDRACOLoader(dracoLoader)
+    loader.load(
+      base + 'models/jwst.glb',
+      (gltf) => {
+        console.log('✅ JWST loaded successfully', gltf.scene)
+        const group = gltf.scene
+        group.scale.setScalar(JWST_SCALE)
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh
+            mesh.castShadow    = false
+            mesh.receiveShadow = false
+          }
+        })
+        dracoLoader.dispose()
+        resolve({
+          group,
+          dispose: () => {
+            group.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh
+                mesh.geometry?.dispose()
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach(m => m.dispose())
+                } else {
+                  mesh.material?.dispose()
+                }
+              }
+            })
+          },
+        })
+      },
+      (progress) => { console.log('JWST loading:', progress.loaded, '/', progress.total) },
+      (error)    => { console.error('❌ JWST failed to load', error); reject(error) },
+    )
+  })
+}
+
+function createScifiStation(): Promise<{ group: THREE.Group; dispose: () => void }> {
+  return new Promise((resolve, reject) => {
+    const base        = import.meta.env.BASE_URL
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
+    const loader = new GLTFLoader()
+    loader.setDRACOLoader(dracoLoader)
+    loader.load(
+      base + 'models/scifi-station.glb',
+      (gltf) => {
+        console.log('✅ Sci-fi station loaded', gltf.scene)
+        const group = gltf.scene
+        group.scale.setScalar(SCIFI_SCALE)
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh
+            mesh.castShadow    = false
+            mesh.receiveShadow = false
+          }
+        })
+        dracoLoader.dispose()
+        resolve({
+          group,
+          dispose: () => {
+            group.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh
+                mesh.geometry?.dispose()
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach(m => m.dispose())
+                } else {
+                  mesh.material?.dispose()
+                }
+              }
+            })
+          },
+        })
+      },
+      (progress) => { console.log('Sci-fi station loading:', progress.loaded, '/', progress.total) },
+      (error)    => { console.error('❌ Sci-fi station failed to load', error); reject(error) },
     )
   })
 }
@@ -859,6 +953,30 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       scene.add(issGroup)
     })
 
+    let jwstGroup:   THREE.Group | null = null
+    let jwstAngle    = 0
+    let jwstDispose: (() => void) | null = null
+    createJWST().then(({ group, dispose }) => {
+      jwstGroup   = group
+      jwstDispose = dispose
+      scene.add(jwstGroup)
+    })
+
+    let scifiGroup:   THREE.Group | null = null
+    let scifiAngle    = Math.PI * 0.7
+    let scifiDispose: (() => void) | null = null
+    createScifiStation().then(({ group, dispose }) => {
+      scifiGroup   = group
+      scifiDispose = dispose
+      scene.add(scifiGroup)
+
+      // Add point light attached to station
+      const stationLight = new THREE.PointLight(0x4488ff, 2, 100)
+      stationLight.position.copy(scifiGroup.position)
+      scene.add(stationLight)
+      scifiGroup.userData.light = stationLight
+    })
+
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader)
     mercuryObj.group.position.set(-900, 0, 20)
@@ -1042,6 +1160,27 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         )
         issGroup.rotation.y = -issAngle + Math.PI / 2
       }
+      if (jwstGroup) {
+        jwstAngle += JWST_ORBIT_SPEED
+        jwstGroup.position.set(
+          earthObj.group.position.x + Math.cos(jwstAngle + Math.PI) * JWST_ORBIT_RADIUS,
+          earthObj.group.position.y + Math.sin(jwstAngle * 0.2) * 4,
+          earthObj.group.position.z + Math.sin(jwstAngle + Math.PI) * JWST_ORBIT_RADIUS,
+        )
+        jwstGroup.rotation.y = -jwstAngle + Math.PI / 2
+      }
+      if (scifiGroup) {
+        scifiAngle += SCIFI_ORBIT_SPEED
+        scifiGroup.position.set(
+          earthObj.group.position.x + Math.cos(scifiAngle) * SCIFI_ORBIT_RADIUS,
+          earthObj.group.position.y + 20,
+          earthObj.group.position.z + Math.sin(scifiAngle) * SCIFI_ORBIT_RADIUS,
+        )
+        scifiGroup.rotation.y += 0.0002
+        if (scifiGroup.userData.light) {
+          (scifiGroup.userData.light as THREE.PointLight).position.copy(scifiGroup.position)
+        }
+      }
       mercuryObj.mesh.rotation.y += 0.0008
       venusObj.mesh.rotation.y   -= 0.0001
       venusObj.atmoMesh.rotation.y -= 0.00015
@@ -1209,7 +1348,12 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
       earthObj.dispose()
       moonObj.dispose()
-      if (issDispose) issDispose()
+      if (issDispose)  issDispose()
+      if (jwstDispose) jwstDispose()
+      if (scifiGroup?.userData.light) {
+        scene.remove(scifiGroup.userData.light as THREE.PointLight)
+      }
+      if (scifiDispose) scifiDispose()
       mercuryObj.dispose()
       venusObj.dispose()
       marsObj.dispose()
