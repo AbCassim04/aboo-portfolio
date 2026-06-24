@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { GLTFLoader }  from 'three/addons/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { useFlightControls } from '../hooks/useFlightControls'
 import { useUFOPhysics }     from '../hooks/useUFOPhysics'
 import FlightHUD             from '../components/FlightHUD'
@@ -148,13 +150,16 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
   })
 }
 
-// ── Earth / Moon constants ────────────────────────────────────────────────
+// ── Earth / Moon / ISS constants ──────────────────────────────────────────
 const EARTH_RADIUS       = 10
 const EARTH_POS          = new THREE.Vector3(0, 0, 0)
 const EARTH_BUFFER       = 12
 const MOON_RADIUS        = 3
 const MOON_ORBIT_RADIUS  = 30
 const MOON_ORBIT_SPEED   = 0.003
+const ISS_ORBIT_RADIUS   = 22
+const ISS_ORBIT_SPEED    = 0.0008
+const ISS_SCALE          = 0.1
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -430,6 +435,50 @@ function createNeptune(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   group.add(mesh)
   group.rotation.z = 0.4942
   return { group, mesh, dispose: () => { neptuneGeo.dispose(); neptuneMat.dispose(); neptuneTex.dispose() } }
+}
+
+function createISS(): Promise<{ group: THREE.Group; dispose: () => void }> {
+  return new Promise((resolve, reject) => {
+    const base        = import.meta.env.BASE_URL
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
+    const loader = new GLTFLoader()
+    loader.setDRACOLoader(dracoLoader)
+    loader.load(
+      base + 'models/iss.glb',
+      (gltf) => {
+        console.log('✅ ISS loaded successfully', gltf.scene)
+        const group = gltf.scene
+        group.scale.setScalar(ISS_SCALE)
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh
+            mesh.castShadow    = false
+            mesh.receiveShadow = false
+          }
+        })
+        dracoLoader.dispose()
+        resolve({
+          group,
+          dispose: () => {
+            group.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh
+                mesh.geometry?.dispose()
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach(m => m.dispose())
+                } else {
+                  mesh.material?.dispose()
+                }
+              }
+            })
+          },
+        })
+      },
+      (progress) => { console.log('ISS loading:', progress.loaded, '/', progress.total) },
+      (error)    => { console.error('❌ ISS failed to load', error); reject(error) },
+    )
+  })
 }
 
 interface FlightModeProps {
@@ -801,6 +850,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
+    let issGroup:   THREE.Group | null = null
+    let issAngle    = 0
+    let issDispose: (() => void) | null = null
+    createISS().then(({ group, dispose }) => {
+      issGroup   = group
+      issDispose = dispose
+      scene.add(issGroup)
+    })
+
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader)
     mercuryObj.group.position.set(-900, 0, 20)
@@ -975,6 +1033,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         EARTH_POS.z + Math.sin(moonAngle) * MOON_ORBIT_RADIUS,
       )
       moonObj.mesh.rotation.y    += 0.0002
+      if (issGroup) {
+        issAngle += ISS_ORBIT_SPEED
+        issGroup.position.set(
+          earthObj.group.position.x + Math.cos(issAngle) * ISS_ORBIT_RADIUS,
+          earthObj.group.position.y + Math.sin(issAngle * 0.3) * 3,
+          earthObj.group.position.z + Math.sin(issAngle) * ISS_ORBIT_RADIUS,
+        )
+        issGroup.rotation.y = -issAngle + Math.PI / 2
+      }
       mercuryObj.mesh.rotation.y += 0.0008
       venusObj.mesh.rotation.y   -= 0.0001
       venusObj.atmoMesh.rotation.y -= 0.00015
@@ -1142,6 +1209,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
       earthObj.dispose()
       moonObj.dispose()
+      if (issDispose) issDispose()
       mercuryObj.dispose()
       venusObj.dispose()
       marsObj.dispose()
