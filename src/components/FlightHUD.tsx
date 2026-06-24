@@ -24,14 +24,8 @@ const RADAR_SCALE  = 56 / 32  // 56px from center = 32 world units
 export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
 }: FlightHUDProps) {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const radarRef  = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
-  }, [])
 
   // Draw radar whenever position or planets change
   useEffect(() => {

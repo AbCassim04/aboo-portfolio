@@ -561,7 +561,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
   const [loadProgress,  setLoadProgress]  = useState(0)
   const [loadDone,      setLoadDone]      = useState(false)
 
-  const isMobile = window.innerWidth < 768
+  const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
   const planetDots = useMemo<PlanetDot[]>(
     () => DESTINATIONS.map(d => ({
