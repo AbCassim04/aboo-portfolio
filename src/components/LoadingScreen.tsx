@@ -100,8 +100,9 @@ export default function LoadingScreen({ progress, done }: LoadingScreenProps) {
                 {/* Exhaust halo */}
                 <motion.ellipse
                   cx="44" cy="148"
-                  rx="28" ry="22"
+                  rx={28} ry={22}
                   fill="url(#exhaustHalo)"
+                  initial={{ ry: 22, opacity: 0.5 }}
                   animate={{ ry: [20, 28, 17, 26, 20], opacity: [0.5, 0.85, 0.4, 0.75, 0.5] }}
                   transition={{ duration: 0.28, repeat: Infinity }}
                 />
@@ -109,24 +110,27 @@ export default function LoadingScreen({ progress, done }: LoadingScreenProps) {
                 {/* Flame — outer (orange) */}
                 <motion.ellipse
                   cx="44" cy="130"
-                  rx="11" ry="24"
+                  rx={11} ry={24}
                   fill="url(#flameOuter)"
+                  initial={{ rx: 11, ry: 24 }}
                   animate={{ ry: [24, 30, 20, 27, 24], rx: [11, 9, 12, 10, 11] }}
                   transition={{ duration: 0.19, repeat: Infinity }}
                 />
                 {/* Flame — mid (yellow) */}
                 <motion.ellipse
                   cx="44" cy="126"
-                  rx="6.5" ry="17"
+                  rx={6.5} ry={17}
                   fill="url(#flameMid)"
+                  initial={{ ry: 17, opacity: 0.9 }}
                   animate={{ ry: [17, 22, 14, 19, 17], opacity: [0.9, 1, 0.8, 1, 0.9] }}
                   transition={{ duration: 0.15, repeat: Infinity }}
                 />
                 {/* Flame — core (white) */}
                 <motion.ellipse
                   cx="44" cy="122"
-                  rx="3" ry="10"
+                  rx={3} ry={10}
                   fill="#ffffff"
+                  initial={{ ry: 10, opacity: 1 }}
                   animate={{ ry: [10, 13, 8, 11, 10], opacity: [1, 0.88, 1, 0.92, 1] }}
                   transition={{ duration: 0.11, repeat: Infinity }}
                 />
@@ -156,10 +160,11 @@ export default function LoadingScreen({ progress, done }: LoadingScreenProps) {
                 <circle cx="44" cy="67" r="9" fill="url(#windowGrad)" />
                 {/* Window inner pulse */}
                 <motion.circle
-                  cx="44" cy="67" r="7"
+                  cx="44" cy="67" r={7}
                   fill="none"
                   stroke="#a78bfa"
                   strokeWidth="0.8"
+                  initial={{ r: 7, opacity: 0.3 }}
                   animate={{ opacity: [0.3, 0.9, 0.3], r: [6, 7.5, 6] }}
                   transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                 />
