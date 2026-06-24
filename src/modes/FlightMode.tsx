@@ -502,21 +502,28 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     rimLight.position.set(-15, -5, -10)
     scene.add(rimLight)
 
-    // ── 1. Skybox ─────────────────────────────────────────────────────────
-    const base = import.meta.env.BASE_URL
+    // ── 1. Skybox — 3-layer NASA JPL star maps ────────────────────────────
+    const base      = import.meta.env.BASE_URL
+    const skyLoader = new THREE.TextureLoader()
 
-    const starsTex = sharedLoader.load(base + 'stars/8k_stars.jpg')
-    const skyGeo1  = new THREE.SphereGeometry(3000, 64, 64)
-    const skyMat1  = new THREE.MeshBasicMaterial({ map: starsTex, side: THREE.BackSide })
-    scene.add(new THREE.Mesh(skyGeo1, skyMat1))
+    const milkyTex  = skyLoader.load(base + 'stars/8k_stars_milky_way.jpg')
+    milkyTex.colorSpace = THREE.SRGBColorSpace
+    const milkyGeo  = new THREE.SphereGeometry(1600, 64, 64)
+    const milkyMat  = new THREE.MeshBasicMaterial({ map: milkyTex, side: THREE.BackSide, transparent: true, opacity: 0.9 })
+    const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat)
+    scene.add(milkyMesh)
 
-    const milkyTex = sharedLoader.load(base + 'stars/8k_stars_milky_way.jpg')
-    const skyGeo2  = new THREE.SphereGeometry(2800, 64, 64)
-    const skyMat2  = new THREE.MeshBasicMaterial({
-      map: milkyTex, side: THREE.BackSide, transparent: true,
-      opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
-    })
-    scene.add(new THREE.Mesh(skyGeo2, skyMat2))
+    const hippTex  = skyLoader.load(base + 'stars/hipp8.jpg')
+    const hippGeo  = new THREE.SphereGeometry(1700, 64, 64)
+    const hippMat  = new THREE.MeshBasicMaterial({ map: hippTex, side: THREE.BackSide, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
+    const hippMesh = new THREE.Mesh(hippGeo, hippMat)
+    scene.add(hippMesh)
+
+    const tychoTex  = skyLoader.load(base + 'stars/tycho8.jpg')
+    const tychoGeo  = new THREE.SphereGeometry(1800, 64, 64)
+    const tychoMat  = new THREE.MeshBasicMaterial({ map: tychoTex, side: THREE.BackSide, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
+    const tychoMesh = new THREE.Mesh(tychoGeo, tychoMat)
+    scene.add(tychoMesh)
 
     // ── 2. Nebula ─────────────────────────────────────────────────────────
     const nebulaPlanes:     THREE.Mesh[]                = []
@@ -940,6 +947,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       // ── Universe animations ────────────────────────────────────────────
       if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
       for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003
+      milkyMesh.rotation.y += 0.00002
+      hippMesh.rotation.y  += 0.000015
+      tychoMesh.rotation.y += 0.00001
 
       nodeGroup.rotation.y += 0.003
       nodeGroup.rotation.x  = Math.sin(t * 0.3) * 0.12
@@ -1107,8 +1117,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       for (const g of destGlowGeos) g.dispose()
       for (const m of destGlowMats) m.dispose()
 
-      skyGeo1.dispose(); skyMat1.dispose(); starsTex.dispose()
-      skyGeo2.dispose(); skyMat2.dispose(); milkyTex.dispose()
+      milkyGeo.dispose();  milkyMat.dispose();  milkyTex.dispose()
+      hippGeo.dispose();   hippMat.dispose();   hippTex.dispose()
+      tychoGeo.dispose();  tychoMat.dispose();  tychoTex.dispose()
       nebulaBgGeo?.dispose(); nebulaBgMat?.dispose()
       for (const m of nebulaMobileMats) m.dispose()
       nodeGeo.dispose(); lineGeo.dispose(); lineMat.dispose()
