@@ -163,8 +163,6 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
-const SCIFI_ORBIT_RADIUS = 180
-const SCIFI_ORBIT_SPEED  = 0.0001
 const SCIFI_SCALE        = 3.0
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
@@ -963,7 +961,6 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     })
 
     let scifiGroup:   THREE.Group | null = null
-    let scifiAngle    = Math.PI * 0.7
     let scifiDispose: (() => void) | null = null
     createScifiStation().then(({ group, dispose }) => {
       scifiGroup   = group
@@ -1176,12 +1173,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         jwstGroup.rotation.y = -jwstAngle + Math.PI / 2
       }
       if (scifiGroup) {
-        scifiAngle += SCIFI_ORBIT_SPEED
-        scifiGroup.position.set(
-          earthObj.group.position.x + Math.cos(scifiAngle) * SCIFI_ORBIT_RADIUS,
-          earthObj.group.position.y + 20,
-          earthObj.group.position.z + Math.sin(scifiAngle) * SCIFI_ORBIT_RADIUS,
-        )
+        scifiGroup.position.set(-650 + 60, 10, -20)
         scifiGroup.rotation.y += 0.0002
         if (scifiGroup.userData.light) {
           (scifiGroup.userData.light as THREE.PointLight).position.copy(scifiGroup.position)
