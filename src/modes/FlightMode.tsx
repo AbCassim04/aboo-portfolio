@@ -321,6 +321,117 @@ function createMoon(loader: THREE.TextureLoader): { mesh: THREE.Mesh; dispose: (
   }
 }
 
+function createMercury(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base       = import.meta.env.BASE_URL
+  const mercuryTex = loader.load(base + 'earth/8k_mercury.jpg')
+  mercuryTex.colorSpace = THREE.SRGBColorSpace
+  const group      = new THREE.Group()
+  const mercuryGeo = new THREE.SphereGeometry(4, 64, 64)
+  const mercuryMat = new THREE.MeshPhongMaterial({ map: mercuryTex, shininess: 5, side: THREE.DoubleSide })
+  const mesh       = new THREE.Mesh(mercuryGeo, mercuryMat)
+  group.add(mesh)
+  group.rotation.z = 0.034
+  return { group, mesh, dispose: () => { mercuryGeo.dispose(); mercuryMat.dispose(); mercuryTex.dispose() } }
+}
+
+function createVenus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; atmoMesh: THREE.Mesh; dispose: () => void } {
+  const base     = import.meta.env.BASE_URL
+  const venusTex = loader.load(base + 'earth/8k_venus_surface.jpg')
+  const atmoTex  = loader.load(base + 'earth/4k_venus_atmosphere.jpg')
+  venusTex.colorSpace = THREE.SRGBColorSpace
+  atmoTex.colorSpace  = THREE.SRGBColorSpace
+  const group    = new THREE.Group()
+  const venusGeo = new THREE.SphereGeometry(9, 64, 64)
+  const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.DoubleSide })
+  const mesh     = new THREE.Mesh(venusGeo, venusMat)
+  group.add(mesh)
+  const atmoGeo  = new THREE.SphereGeometry(9.3, 64, 64)
+  const atmoMat  = new THREE.MeshPhongMaterial({ map: atmoTex, shininess: 3, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
+  const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
+  group.add(atmoMesh)
+  group.rotation.z = 3.096
+  return { group, mesh, atmoMesh, dispose: () => { venusGeo.dispose(); venusMat.dispose(); atmoGeo.dispose(); atmoMat.dispose(); venusTex.dispose(); atmoTex.dispose() } }
+}
+
+function createMars(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base    = import.meta.env.BASE_URL
+  const marsTex = loader.load(base + 'earth/8k_mars.jpg')
+  marsTex.colorSpace = THREE.SRGBColorSpace
+  const group   = new THREE.Group()
+  const marsGeo = new THREE.SphereGeometry(5, 64, 64)
+  const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.DoubleSide })
+  const mesh    = new THREE.Mesh(marsGeo, marsMat)
+  group.add(mesh)
+  group.rotation.z = 0.4396
+  return { group, mesh, dispose: () => { marsGeo.dispose(); marsMat.dispose(); marsTex.dispose() } }
+}
+
+function createJupiter(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base       = import.meta.env.BASE_URL
+  const jupiterTex = loader.load(base + 'earth/8k_jupiter.jpg')
+  jupiterTex.colorSpace = THREE.SRGBColorSpace
+  const group      = new THREE.Group()
+  const jupiterGeo = new THREE.SphereGeometry(45, 64, 64)
+  const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.DoubleSide })
+  const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
+  group.add(mesh)
+  group.rotation.z = 0.0546
+  return { group, mesh, dispose: () => { jupiterGeo.dispose(); jupiterMat.dispose(); jupiterTex.dispose() } }
+}
+
+function createSaturn(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base      = import.meta.env.BASE_URL
+  const saturnTex = loader.load(base + 'earth/8k_saturn.jpg')
+  const ringTex   = loader.load(base + 'earth/8k_saturn_ring_alpha.png')
+  saturnTex.colorSpace = THREE.SRGBColorSpace
+  ringTex.colorSpace   = THREE.SRGBColorSpace
+  const group     = new THREE.Group()
+  const saturnGeo = new THREE.SphereGeometry(35, 64, 64)
+  const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.DoubleSide })
+  const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
+  group.add(mesh)
+  const ringInner = 45, ringOuter = 84
+  const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, 128)
+  const pos = ringGeo.attributes.position as THREE.BufferAttribute
+  const uv  = ringGeo.attributes.uv as THREE.BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    const r = Math.sqrt(pos.getX(i) ** 2 + pos.getY(i) ** 2)
+    uv.setXY(i, (r - ringInner) / (ringOuter - ringInner), 0.5)
+  }
+  const ringMat  = new THREE.MeshBasicMaterial({ map: ringTex, side: THREE.DoubleSide, transparent: true, depthWrite: false, opacity: 1.0 })
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat)
+  ringMesh.rotation.x = Math.PI / 2.5
+  group.add(ringMesh)
+  group.rotation.z = 0.4665
+  return { group, mesh, dispose: () => { saturnGeo.dispose(); saturnMat.dispose(); ringGeo.dispose(); ringMat.dispose(); saturnTex.dispose(); ringTex.dispose() } }
+}
+
+function createUranus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base      = import.meta.env.BASE_URL
+  const uranusTex = loader.load(base + 'earth/2k_uranus.jpg')
+  uranusTex.colorSpace = THREE.SRGBColorSpace
+  const group     = new THREE.Group()
+  const uranusGeo = new THREE.SphereGeometry(20, 64, 64)
+  const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.DoubleSide })
+  const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
+  group.add(mesh)
+  group.rotation.z = 1.706
+  return { group, mesh, dispose: () => { uranusGeo.dispose(); uranusMat.dispose(); uranusTex.dispose() } }
+}
+
+function createNeptune(loader: THREE.TextureLoader): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
+  const base       = import.meta.env.BASE_URL
+  const neptuneTex = loader.load(base + 'earth/2k_neptune.jpg')
+  neptuneTex.colorSpace = THREE.SRGBColorSpace
+  const group      = new THREE.Group()
+  const neptuneGeo = new THREE.SphereGeometry(19, 64, 64)
+  const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.DoubleSide })
+  const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
+  group.add(mesh)
+  group.rotation.z = 0.4942
+  return { group, mesh, dispose: () => { neptuneGeo.dispose(); neptuneMat.dispose(); neptuneTex.dispose() } }
+}
+
 interface FlightModeProps {
   onExit:            () => void
   onEnterBlackHole:  () => void
@@ -683,6 +794,35 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
+    // ── 12.5. Planets (static decorative) ────────────────────────────────
+    const mercuryObj = createMercury(sharedLoader)
+    mercuryObj.group.position.set(80, 20, -60)
+    scene.add(mercuryObj.group)
+
+    const venusObj = createVenus(sharedLoader)
+    venusObj.group.position.set(-100, -10, -80)
+    scene.add(venusObj.group)
+
+    const marsObj = createMars(sharedLoader)
+    marsObj.group.position.set(-80, 40, 100)
+    scene.add(marsObj.group)
+
+    const jupiterObj = createJupiter(sharedLoader)
+    jupiterObj.group.position.set(200, -30, -180)
+    scene.add(jupiterObj.group)
+
+    const saturnObj = createSaturn(sharedLoader)
+    saturnObj.group.position.set(-180, 20, -160)
+    scene.add(saturnObj.group)
+
+    const uranusObj = createUranus(sharedLoader)
+    uranusObj.group.position.set(60, 80, -220)
+    scene.add(uranusObj.group)
+
+    const neptuneObj = createNeptune(sharedLoader)
+    neptuneObj.group.position.set(220, -20, 80)
+    scene.add(neptuneObj.group)
+
     // ── 13. Sun ───────────────────────────────────────────────────────────
     const sunTexture = sharedLoader.load(base + 'stars/8k_sun.jpg')
     const sunGeo     = new THREE.SphereGeometry(18, 64, 64)
@@ -783,7 +923,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         EARTH_POS.y + Math.sin(moonAngle * 0.2) * 8,
         EARTH_POS.z + Math.sin(moonAngle) * MOON_ORBIT_RADIUS,
       )
-      moonObj.mesh.rotation.y += 0.0002
+      moonObj.mesh.rotation.y    += 0.0002
+      mercuryObj.mesh.rotation.y += 0.0008
+      venusObj.mesh.rotation.y   -= 0.0001
+      venusObj.atmoMesh.rotation.y -= 0.00015
+      marsObj.mesh.rotation.y    += 0.0004
+      jupiterObj.mesh.rotation.y += 0.001
+      saturnObj.mesh.rotation.y  += 0.0009
+      uranusObj.mesh.rotation.y  += 0.0003
+      neptuneObj.mesh.rotation.y += 0.00035
 
       // Shooting stars (desktop)
       if (!isMobile) {
@@ -942,6 +1090,13 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
       earthObj.dispose()
       moonObj.dispose()
+      mercuryObj.dispose()
+      venusObj.dispose()
+      marsObj.dispose()
+      jupiterObj.dispose()
+      saturnObj.dispose()
+      uranusObj.dispose()
+      neptuneObj.dispose()
       sunGeo.dispose(); sunMat.dispose(); sunTexture.dispose()
       sunGlowGeo.dispose(); sunGlowMat.dispose()
 
