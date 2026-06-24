@@ -108,6 +108,7 @@ export default function FlightHUD({
     userSelect: 'none',
     cursor: 'pointer',
     WebkitUserSelect: 'none',
+    pointerEvents: 'auto',
   }
 
   return (
@@ -180,41 +181,43 @@ export default function FlightHUD({
         )}
       </AnimatePresence>
 
-      {/* Speed bar — bottom center */}
-      <div style={{
-        position:    'absolute',
-        bottom:      '2rem',
-        left:        '50%',
-        transform:   'translateX(-50%)',
-        display:     'flex',
-        flexDirection: 'column',
-        alignItems:  'center',
-        gap:         '0.35rem',
-      }}>
-        <span style={{ color: 'rgba(215,226,234,0.4)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          {isBoosting ? 'BOOST' : 'SPEED'}
-        </span>
+      {/* Speed bar — bottom center, desktop only */}
+      {!isMobile && (
         <div style={{
-          width:        '140px',
-          height:       '4px',
-          background:   'rgba(215,226,234,0.1)',
-          borderRadius: '999px',
-          overflow:     'hidden',
+          position:    'absolute',
+          bottom:      '2rem',
+          left:        '50%',
+          transform:   'translateX(-50%)',
+          display:     'flex',
+          flexDirection: 'column',
+          alignItems:  'center',
+          gap:         '0.35rem',
         }}>
+          <span style={{ color: 'rgba(215,226,234,0.4)', fontSize: '0.65rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            {isBoosting ? 'BOOST' : 'SPEED'}
+          </span>
           <div style={{
-            width:        `${speedPct}%`,
-            height:       '100%',
-            background:   isBoosting
-              ? 'linear-gradient(90deg, #7721B1, #D7E2EA)'
-              : 'linear-gradient(90deg, #7721B1, #3B8BD4)',
+            width:        '140px',
+            height:       '4px',
+            background:   'rgba(215,226,234,0.1)',
             borderRadius: '999px',
-            transition:   'width 0.1s ease, background 0.3s ease',
-          }} />
+            overflow:     'hidden',
+          }}>
+            <div style={{
+              width:        `${speedPct}%`,
+              height:       '100%',
+              background:   isBoosting
+                ? 'linear-gradient(90deg, #7721B1, #D7E2EA)'
+                : 'linear-gradient(90deg, #7721B1, #3B8BD4)',
+              borderRadius: '999px',
+              transition:   'width 0.1s ease, background 0.3s ease',
+            }} />
+          </div>
+          <span style={{ color: 'rgba(215,226,234,0.3)', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+            {speedPct}%
+          </span>
         </div>
-        <span style={{ color: 'rgba(215,226,234,0.3)', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
-          {speedPct}%
-        </span>
-      </div>
+      )}
 
       {/* Controls hint — above radar, desktop only */}
       {!isMobile && (
