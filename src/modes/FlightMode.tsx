@@ -163,7 +163,7 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
-const SCIFI_ORBIT_RADIUS = 100
+const SCIFI_ORBIT_RADIUS = 180
 const SCIFI_ORBIT_SPEED  = 0.0001
 const SCIFI_SCALE        = 3.0
 
@@ -971,10 +971,16 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       scene.add(scifiGroup)
 
       // Add point light attached to station
-      const stationLight = new THREE.PointLight(0x4488ff, 2, 100)
+      const stationLight = new THREE.PointLight(0x4488ff, 8, 400)
       stationLight.position.copy(scifiGroup.position)
       scene.add(stationLight)
       scifiGroup.userData.light = stationLight
+
+      const stationLight2 = new THREE.PointLight(0xffaa44, 4, 300)
+      stationLight2.position.copy(scifiGroup.position)
+      stationLight2.position.y += 20
+      scene.add(stationLight2)
+      scifiGroup.userData.light2 = stationLight2
     })
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
@@ -1180,6 +1186,11 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         if (scifiGroup.userData.light) {
           (scifiGroup.userData.light as THREE.PointLight).position.copy(scifiGroup.position)
         }
+        if (scifiGroup.userData.light2) {
+          const l2 = scifiGroup.userData.light2 as THREE.PointLight
+          l2.position.copy(scifiGroup.position)
+          l2.position.y += 20
+        }
       }
       mercuryObj.mesh.rotation.y += 0.0008
       venusObj.mesh.rotation.y   -= 0.0001
@@ -1352,6 +1363,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       if (jwstDispose) jwstDispose()
       if (scifiGroup?.userData.light) {
         scene.remove(scifiGroup.userData.light as THREE.PointLight)
+      }
+      if (scifiGroup?.userData.light2) {
+        scene.remove(scifiGroup.userData.light2 as THREE.PointLight)
       }
       if (scifiDispose) scifiDispose()
       mercuryObj.dispose()
