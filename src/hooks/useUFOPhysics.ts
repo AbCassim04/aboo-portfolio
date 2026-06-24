@@ -24,7 +24,7 @@ export function useUFOPhysics(
   inputRef: React.MutableRefObject<FlightInput>,
 ): { ufoStateRef: React.MutableRefObject<UFOState>; update: () => void } {
   const ufoStateRef = useRef<UFOState>({
-    position:        new THREE.Vector3(0, 0, 12),
+    position:        new THREE.Vector3(30, 0, 30),
     velocity:        new THREE.Vector3(),
     rotation:        new THREE.Euler(),
     angularVelocity: new THREE.Vector3(),
@@ -52,6 +52,8 @@ export function useUFOPhysics(
     state.angularVelocity.y -= inp.yaw   * TURN_RATE
     state.angularVelocity.x -= inp.pitch * TURN_RATE
     state.angularVelocity.z -= inp.roll  * TURN_RATE
+    if (inp.pitchUp)   state.angularVelocity.x += TURN_RATE
+    if (inp.pitchDown) state.angularVelocity.x -= TURN_RATE
 
     // Drag
     state.velocity.multiplyScalar(DRAG)
@@ -68,13 +70,13 @@ export function useUFOPhysics(
     state.rotation.y += state.angularVelocity.y
     state.rotation.z += state.angularVelocity.z
 
-    // Soft boundary pull at 230u, hard clamp at 250u
+    // Soft boundary pull at 2580u, hard clamp at 2600u
     const dist = state.position.length()
-    if (dist > 230) {
+    if (dist > 2580) {
       _pull.copy(state.position).normalize().multiplyScalar(-0.012)
       state.velocity.add(_pull)
     }
-    if (dist > 250) state.position.normalize().multiplyScalar(250)
+    if (dist > 2600) state.position.normalize().multiplyScalar(2600)
   }
 
   return { ufoStateRef, update }

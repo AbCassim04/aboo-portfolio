@@ -1,18 +1,20 @@
 import { useEffect, useRef } from 'react'
 
 export interface FlightInput {
-  thrust:   number   // 0 to 1
-  brake:    number   // 0 to 1
-  yaw:      number   // -1 to 1
-  pitch:    number   // -1 to 1
-  roll:     number   // -1 to 1
-  vertical: number   // -1 to 1  (Shift = up, Ctrl = down)
-  boost:    boolean
-  land:     boolean
+  thrust:    number   // 0 to 1
+  brake:     number   // 0 to 1
+  yaw:       number   // -1 to 1
+  pitch:     number   // -1 to 1
+  roll:      number   // -1 to 1
+  vertical:  number   // -1 to 1  (Shift = up, Ctrl = down)
+  boost:     boolean
+  land:      boolean
+  pitchUp:   boolean  // mobile touch
+  pitchDown: boolean  // mobile touch
 }
 
 export function useFlightControls(): React.MutableRefObject<FlightInput> {
-  const inputRef = useRef<FlightInput>({ thrust: 0, brake: 0, yaw: 0, pitch: 0, roll: 0, vertical: 0, boost: false, land: false })
+  const inputRef = useRef<FlightInput>({ thrust: 0, brake: 0, yaw: 0, pitch: 0, roll: 0, vertical: 0, boost: false, land: false, pitchUp: false, pitchDown: false })
 
   useEffect(() => {
     const keys = new Set<string>()

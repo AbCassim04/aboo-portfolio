@@ -25,6 +25,7 @@ export default function HubMode({ onTakeFlight }: HubModeProps) {
         cameraStateRef={cameraStateRef}
         currentZone={currentZone}
         onTransitionComplete={onTransitionComplete}
+        navigateTo={navigateTo}
       />
       <HeroOverlay
         currentZone={currentZone}

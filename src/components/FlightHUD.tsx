@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import type { FlightInput } from '../hooks/useFlightControls'
@@ -24,8 +24,14 @@ const RADAR_SCALE  = 56 / 32  // 56px from center = 32 world units
 export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
 }: FlightHUDProps) {
-  const isMobile  = window.innerWidth < 768
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const radarRef  = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   // Joystick state refs (mobile only)
   const joystickAreaRef = useRef<HTMLDivElement>(null)
@@ -229,9 +235,15 @@ export default function FlightHUD({
           >
             <span style={{ opacity: 0.7 }}>Approaching </span>
             <strong>{nearestPlanet.name}</strong>
-            <span style={{ opacity: 0.5 }}> — Press </span>
-            <kbd style={{ background: 'rgba(215,226,234,0.1)', borderRadius: '4px', padding: '0 5px' }}>F</kbd>
-            <span style={{ opacity: 0.5 }}> to land</span>
+            {isMobile ? (
+              <span style={{ opacity: 0.5 }}> — tap LAND to enter</span>
+            ) : (
+              <>
+                <span style={{ opacity: 0.5 }}> — Press </span>
+                <kbd style={{ background: 'rgba(215,226,234,0.1)', borderRadius: '4px', padding: '0 5px' }}>F</kbd>
+                <span style={{ opacity: 0.5 }}> to land</span>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -323,61 +335,164 @@ export default function FlightHUD({
 
       {/* Virtual joystick — bottom left, mobile only */}
       {isMobile && (
-        <div style={{ position: 'absolute', bottom: '2rem', left: '1.5rem', pointerEvents: 'auto' }}>
-          <div
-            ref={joystickAreaRef}
-            style={{
-              width:        '110px',
-              height:       '110px',
-              borderRadius: '50%',
-              background:   'rgba(12,12,12,0.4)',
-              backdropFilter: 'blur(8px)',
-              border:       '1px solid rgba(215,226,234,0.15)',
-              position:     'relative',
-              touchAction:  'none',
-              userSelect:   'none',
-            }}
-          >
+        <>
+          <div style={{ position: 'absolute', bottom: '2rem', left: '1.5rem', pointerEvents: 'auto' }}>
             <div
-              ref={knobRef}
+              ref={joystickAreaRef}
               style={{
-                position:     'absolute',
-                top:          '50%',
-                left:         '50%',
-                width:        '36px',
-                height:       '36px',
+                width:        '110px',
+                height:       '110px',
                 borderRadius: '50%',
-                background:   'rgba(119,33,177,0.5)',
-                border:       '1px solid rgba(119,33,177,0.8)',
-                transform:    'translate(-50%, -50%)',
-                pointerEvents: 'none',
+                background:   'rgba(12,12,12,0.4)',
+                backdropFilter: 'blur(8px)',
+                border:       '1px solid rgba(215,226,234,0.15)',
+                position:     'relative',
+                touchAction:  'none',
+                userSelect:   'none',
               }}
-            />
+            >
+              <div
+                ref={knobRef}
+                style={{
+                  position:     'absolute',
+                  top:          '50%',
+                  left:         '50%',
+                  width:        '36px',
+                  height:       '36px',
+                  borderRadius: '50%',
+                  background:   'rgba(119,33,177,0.5)',
+                  border:       '1px solid rgba(119,33,177,0.8)',
+                  transform:    'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
+
+            {/* Boost button below joystick */}
+            <button
+              onTouchStart={(e) => { e.preventDefault(); inputRef.current.boost = true }}
+              onTouchEnd={(e)   => { e.preventDefault(); inputRef.current.boost = false }}
+              onTouchCancel={() => { inputRef.current.boost = false }}
+              style={{
+                marginTop:    '0.75rem',
+                display:      'block',
+                width:        '110px',
+                padding:      '0.5rem',
+                borderRadius: '999px',
+                background:   'rgba(119,33,177,0.2)',
+                border:       '1px solid rgba(119,33,177,0.4)',
+                color:        '#D7E2EA',
+                fontSize:     '0.7rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                cursor:       'pointer',
+                touchAction:  'none',
+              }}
+            >
+              BOOST
+            </button>
           </div>
 
-          {/* Boost button below joystick */}
+          {/* Pitch and Vertical controls — right side */}
+          <div style={{
+            position:      'absolute',
+            right:         '1.5rem',
+            bottom:        '8rem',
+            display:       'flex',
+            flexDirection: 'column',
+            alignItems:    'center',
+            gap:           '0.5rem',
+            pointerEvents: 'auto',
+          }}>
+            <button
+              onTouchStart={() => { inputRef.current.pitchUp = true }}
+              onTouchEnd={() => { inputRef.current.pitchUp = false }}
+              onTouchCancel={() => { inputRef.current.pitchUp = false }}
+              style={{
+                width: '52px', height: '52px',
+                borderRadius: '50%',
+                background: 'rgba(155,79,192,0.25)',
+                border: '1px solid rgba(155,79,192,0.5)',
+                color: '#c4b5fd', fontSize: '1.4rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                touchAction: 'none', userSelect: 'none', cursor: 'pointer',
+              }}
+            >▲</button>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onTouchStart={() => { inputRef.current.vertical = -1 }}
+                onTouchEnd={() => { inputRef.current.vertical = 0 }}
+                onTouchCancel={() => { inputRef.current.vertical = 0 }}
+                style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: 'rgba(155,79,192,0.25)',
+                  border: '1px solid rgba(155,79,192,0.5)',
+                  color: '#c4b5fd', fontSize: '1.1rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  touchAction: 'none', userSelect: 'none', cursor: 'pointer',
+                }}
+              >↓Y</button>
+              <button
+                onTouchStart={() => { inputRef.current.vertical = 1 }}
+                onTouchEnd={() => { inputRef.current.vertical = 0 }}
+                onTouchCancel={() => { inputRef.current.vertical = 0 }}
+                style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: 'rgba(155,79,192,0.25)',
+                  border: '1px solid rgba(155,79,192,0.5)',
+                  color: '#c4b5fd', fontSize: '1.1rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  touchAction: 'none', userSelect: 'none', cursor: 'pointer',
+                }}
+              >↑Y</button>
+            </div>
+
+            <button
+              onTouchStart={() => { inputRef.current.pitchDown = true }}
+              onTouchEnd={() => { inputRef.current.pitchDown = false }}
+              onTouchCancel={() => { inputRef.current.pitchDown = false }}
+              style={{
+                width: '52px', height: '52px',
+                borderRadius: '50%',
+                background: 'rgba(155,79,192,0.25)',
+                border: '1px solid rgba(155,79,192,0.5)',
+                color: '#c4b5fd', fontSize: '1.4rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                touchAction: 'none', userSelect: 'none', cursor: 'pointer',
+              }}
+            >▼</button>
+          </div>
+
+          {/* LAND button — bottom center */}
           <button
-            onTouchStart={(e) => { e.preventDefault(); inputRef.current.boost = true }}
-            onTouchEnd={(e)   => { e.preventDefault(); inputRef.current.boost = false }}
+            onTouchStart={() => { inputRef.current.land = true }}
+            onTouchEnd={() => { inputRef.current.land = false }}
+            onTouchCancel={() => { inputRef.current.land = false }}
             style={{
-              marginTop:    '0.75rem',
-              display:      'block',
-              width:        '110px',
-              padding:      '0.5rem',
-              borderRadius: '999px',
-              background:   'rgba(119,33,177,0.2)',
-              border:       '1px solid rgba(119,33,177,0.4)',
-              color:        '#D7E2EA',
-              fontSize:     '0.7rem',
-              textTransform: 'uppercase',
+              position:      'absolute',
+              bottom:        '2rem',
+              left:          '50%',
+              transform:     'translateX(30px)',
+              width:         '64px',
+              height:        '64px',
+              borderRadius:  '50%',
+              background:    'rgba(34,197,94,0.25)',
+              border:        '1px solid rgba(34,197,94,0.5)',
+              color:         '#86efac',
+              fontSize:      '0.65rem',
+              fontFamily:    'Kanit, sans-serif',
               letterSpacing: '0.1em',
-              cursor:       'pointer',
-              touchAction:  'none',
+              display:       'flex',
+              alignItems:    'center',
+              justifyContent: 'center',
+              touchAction:   'none',
+              userSelect:    'none',
+              cursor:        'pointer',
+              pointerEvents: 'auto',
             }}
-          >
-            BOOST
-          </button>
-        </div>
+          >LAND</button>
+        </>
       )}
 
     </div>

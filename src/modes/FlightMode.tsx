@@ -149,12 +149,12 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
 }
 
 // ── Earth / Moon constants ────────────────────────────────────────────────
-const EARTH_RADIUS       = 25
-const EARTH_POS          = new THREE.Vector3(-60, 0, -80)
-const EARTH_BUFFER       = 28
-const MOON_RADIUS        = 7
-const MOON_ORBIT_RADIUS  = 60
-const MOON_ORBIT_SPEED   = 0.0003
+const EARTH_RADIUS       = 10
+const EARTH_POS          = new THREE.Vector3(0, 0, 0)
+const EARTH_BUFFER       = 12
+const MOON_RADIUS        = 3
+const MOON_ORBIT_RADIUS  = 30
+const MOON_ORBIT_SPEED   = 0.003
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -192,11 +192,11 @@ interface Destination {
 }
 
 const DESTINATIONS: Destination[] = [
-  { name: 'ABOUT',    pos: [-12,  2,  0], color: 0x7721B1, shape: 'icosahedron',  size: 3.0 },
-  { name: 'SKILLS',   pos: [ 12, -1,  0], color: 0x3B8BD4, shape: 'octahedron',   size: 2.5 },
-  { name: 'PROJECTS', pos: [  0, 10,  0], color: 0x22c55e, shape: 'dodecahedron', size: 3.2 },
-  { name: 'CONTACT',  pos: [  0,-10,  0], color: 0xD7E2EA, shape: 'torusknot',    size: 2.0 },
-  { name: 'M87*',     pos: [  0,  0,-28], color: 0x1a0030, shape: 'torusknot',    size: 1.5 },
+  { name: 'ABOUT',    pos: [-6,  22,  -4], color: 0x7721B1, shape: 'icosahedron',  size: 1.2 },
+  { name: 'SKILLS',   pos: [ 6,  22,  -4], color: 0x3B8BD4, shape: 'octahedron',   size: 1.0 },
+  { name: 'PROJECTS', pos: [ 0,  26,   4], color: 0x22c55e, shape: 'dodecahedron', size: 1.3 },
+  { name: 'CONTACT',  pos: [ 0,  18,   0], color: 0xD7E2EA, shape: 'torusknot',    size: 0.8 },
+  { name: 'M87*',     pos: [ 0,  30, -10], color: 0x1a0030, shape: 'torusknot',    size: 0.6 },
 ]
 
 function createGeometry(shape: string, size: number): THREE.BufferGeometry {
@@ -266,7 +266,7 @@ function createEarth(loader: THREE.TextureLoader): {
   const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
   group.add(cloudMesh)
 
-  const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS + 2, 64, 64)
+  const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS + 1, 64, 64)
   const atmoMat = new THREE.ShaderMaterial({
     vertexShader: `
       varying vec3 vNormal;
@@ -345,7 +345,7 @@ function createVenus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: T
   const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh     = new THREE.Mesh(venusGeo, venusMat)
   group.add(mesh)
-  const atmoGeo  = new THREE.SphereGeometry(9.3, 64, 64)
+  const atmoGeo  = new THREE.SphereGeometry(9.8, 64, 64)
   const atmoMat  = new THREE.MeshPhongMaterial({ map: atmoTex, shininess: 3, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
   const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
   group.add(atmoMesh)
@@ -358,7 +358,7 @@ function createMars(loader: THREE.TextureLoader): { group: THREE.Group; mesh: TH
   const marsTex = loader.load(base + 'earth/8k_mars.jpg')
   marsTex.colorSpace = THREE.SRGBColorSpace
   const group   = new THREE.Group()
-  const marsGeo = new THREE.SphereGeometry(5, 64, 64)
+  const marsGeo = new THREE.SphereGeometry(7, 64, 64)
   const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.DoubleSide })
   const mesh    = new THREE.Mesh(marsGeo, marsMat)
   group.add(mesh)
@@ -371,7 +371,7 @@ function createJupiter(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   const jupiterTex = loader.load(base + 'earth/8k_jupiter.jpg')
   jupiterTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const jupiterGeo = new THREE.SphereGeometry(45, 64, 64)
+  const jupiterGeo = new THREE.SphereGeometry(110, 64, 64)
   const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
   group.add(mesh)
@@ -386,11 +386,11 @@ function createSaturn(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   saturnTex.colorSpace = THREE.SRGBColorSpace
   ringTex.colorSpace   = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const saturnGeo = new THREE.SphereGeometry(35, 64, 64)
+  const saturnGeo = new THREE.SphereGeometry(90, 64, 64)
   const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
   group.add(mesh)
-  const ringInner = 45, ringOuter = 84
+  const ringInner = 117, ringOuter = 216
   const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, 128)
   const pos = ringGeo.attributes.position as THREE.BufferAttribute
   const uv  = ringGeo.attributes.uv as THREE.BufferAttribute
@@ -411,7 +411,7 @@ function createUranus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   const uranusTex = loader.load(base + 'earth/2k_uranus.jpg')
   uranusTex.colorSpace = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const uranusGeo = new THREE.SphereGeometry(20, 64, 64)
+  const uranusGeo = new THREE.SphereGeometry(40, 64, 64)
   const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
   group.add(mesh)
@@ -424,7 +424,7 @@ function createNeptune(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   const neptuneTex = loader.load(base + 'earth/2k_neptune.jpg')
   neptuneTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const neptuneGeo = new THREE.SphereGeometry(19, 64, 64)
+  const neptuneGeo = new THREE.SphereGeometry(38, 64, 64)
   const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
   group.add(mesh)
@@ -479,7 +479,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── Scene / Camera / Renderer ──────────────────────────────────────────
     const scene    = new THREE.Scene()
-    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 2000)
+    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 4000)
     const renderer = new THREE.WebGLRenderer({ antialias: !isMobile })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
@@ -494,7 +494,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const ambientLight = new THREE.AmbientLight(0x111122, 0.3)
     scene.add(ambientLight)
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.0)
-    sunLight.position.set(400, 100, 300)
+    sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
@@ -506,12 +506,12 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const base = import.meta.env.BASE_URL
 
     const starsTex = sharedLoader.load(base + 'stars/8k_stars.jpg')
-    const skyGeo1  = new THREE.SphereGeometry(1800, 64, 64)
+    const skyGeo1  = new THREE.SphereGeometry(3000, 64, 64)
     const skyMat1  = new THREE.MeshBasicMaterial({ map: starsTex, side: THREE.BackSide })
     scene.add(new THREE.Mesh(skyGeo1, skyMat1))
 
     const milkyTex = sharedLoader.load(base + 'stars/8k_stars_milky_way.jpg')
-    const skyGeo2  = new THREE.SphereGeometry(1700, 64, 64)
+    const skyGeo2  = new THREE.SphereGeometry(2800, 64, 64)
     const skyMat2  = new THREE.MeshBasicMaterial({
       map: milkyTex, side: THREE.BackSide, transparent: true,
       opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -782,7 +782,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     }
 
     // ── 11. Boundary sphere ────────────────────────────────────────────────
-    const boundGeo = new THREE.SphereGeometry(250, 16, 12)
+    const boundGeo = new THREE.SphereGeometry(2600, 16, 12)
     const boundMat = new THREE.MeshBasicMaterial({ color: 0x7721b1, wireframe: true, transparent: true, opacity: 0.02 })
     scene.add(new THREE.Mesh(boundGeo, boundMat))
 
@@ -796,42 +796,54 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader)
-    mercuryObj.group.position.set(80, 20, -60)
+    mercuryObj.group.position.set(-900, 0, 20)
     scene.add(mercuryObj.group)
 
     const venusObj = createVenus(sharedLoader)
-    venusObj.group.position.set(-100, -10, -80)
+    venusObj.group.position.set(-650, 0, -30)
     scene.add(venusObj.group)
 
     const marsObj = createMars(sharedLoader)
-    marsObj.group.position.set(-80, 40, 100)
+    marsObj.group.position.set(300, 0, 20)
     scene.add(marsObj.group)
 
     const jupiterObj = createJupiter(sharedLoader)
-    jupiterObj.group.position.set(200, -30, -180)
+    jupiterObj.group.position.set(800, 0, -40)
     scene.add(jupiterObj.group)
 
     const saturnObj = createSaturn(sharedLoader)
-    saturnObj.group.position.set(-180, 20, -160)
+    saturnObj.group.position.set(1400, 0, 30)
     scene.add(saturnObj.group)
 
     const uranusObj = createUranus(sharedLoader)
-    uranusObj.group.position.set(60, 80, -220)
+    uranusObj.group.position.set(1900, 0, -20)
     scene.add(uranusObj.group)
 
     const neptuneObj = createNeptune(sharedLoader)
-    neptuneObj.group.position.set(220, -20, 80)
+    neptuneObj.group.position.set(2300, 0, 10)
     scene.add(neptuneObj.group)
 
     // ── 13. Sun ───────────────────────────────────────────────────────────
     const sunTexture = sharedLoader.load(base + 'stars/8k_sun.jpg')
-    const sunGeo     = new THREE.SphereGeometry(18, 64, 64)
+    const sunGeo     = new THREE.SphereGeometry(80, 64, 64)
     const sunMat     = new THREE.MeshBasicMaterial({ map: sunTexture })
     const sunMesh    = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(400, 100, 300)
+    sunMesh.position.set(-1200, 0, 0)
     scene.add(sunMesh)
 
-    const sunGlowGeo = new THREE.SphereGeometry(22, 32, 32)
+    const coronaGeo = new THREE.SphereGeometry(92, 32, 32)
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color:       0xff9900,
+      transparent: true,
+      opacity:     0.08,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    coronaGeo.translate(-1200, 0, 0)
+    scene.add(new THREE.Mesh(coronaGeo, coronaMat))
+
+    const sunGlowGeo = new THREE.SphereGeometry(100, 32, 32)
     const sunGlowMat = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
@@ -840,8 +852,21 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunGlowGeo.translate(400, 100, 300)
+    sunGlowGeo.translate(-1200, 0, 0)
     scene.add(new THREE.Mesh(sunGlowGeo, sunGlowMat))
+
+    // Faint path line along X axis connecting all planets
+    const pathGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-1400, 0, 0),
+      new THREE.Vector3(2500, 0, 0),
+    ])
+    const pathMat = new THREE.LineBasicMaterial({
+      color:       0x334455,
+      transparent: true,
+      opacity:     0.15,
+      depthWrite:  false,
+    })
+    scene.add(new THREE.Line(pathGeo, pathMat))
 
     // ── Entry animation ────────────────────────────────────────────────────
     let entryProgress = 0
@@ -890,6 +915,22 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         ufoStateRef.current.position.copy(EARTH_POS).addScaledVector(pushDir, EARTH_RADIUS + EARTH_BUFFER)
         const dot = ufoStateRef.current.velocity.dot(pushDir)
         if (dot < 0) ufoStateRef.current.velocity.addScaledVector(pushDir, -dot)
+      }
+
+      // ── Jupiter surface repulsion ────────────────────────────────────────
+      const toUFOJupiter = ufoStateRef.current.position.clone().sub(jupiterObj.group.position)
+      if (toUFOJupiter.length() < 125) {
+        ufoStateRef.current.position.copy(jupiterObj.group.position).addScaledVector(toUFOJupiter.normalize(), 125)
+        const dot = ufoStateRef.current.velocity.dot(toUFOJupiter.normalize())
+        if (dot < 0) ufoStateRef.current.velocity.addScaledVector(toUFOJupiter.normalize(), -dot)
+      }
+
+      // ── Saturn repulsion (including rings) ───────────────────────────────
+      const toUFOSaturn = ufoStateRef.current.position.clone().sub(saturnObj.group.position)
+      if (toUFOSaturn.length() < 230) {
+        ufoStateRef.current.position.copy(saturnObj.group.position).addScaledVector(toUFOSaturn.normalize(), 230)
+        const dot = ufoStateRef.current.velocity.dot(toUFOSaturn.normalize())
+        if (dot < 0) ufoStateRef.current.velocity.addScaledVector(toUFOSaturn.normalize(), -dot)
       }
 
       const state  = ufoStateRef.current
@@ -1098,7 +1139,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       uranusObj.dispose()
       neptuneObj.dispose()
       sunGeo.dispose(); sunMat.dispose(); sunTexture.dispose()
+      coronaGeo.dispose(); coronaMat.dispose()
       sunGlowGeo.dispose(); sunGlowMat.dispose()
+      pathGeo.dispose(); pathMat.dispose()
 
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)

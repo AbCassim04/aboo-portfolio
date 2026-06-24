@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import type { CameraTransitionState } from '../hooks/useCameraNavigation'
+import type { CameraTransitionState, Zone } from '../hooks/useCameraNavigation'
 import LoadingScreen from './LoadingScreen'
 
 // ── GLSL shaders ───────────────────────────────────────────────────────────
@@ -147,11 +147,11 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
 
 // ── Earth / Moon ───────────────────────────────────────────────────────────
 
-const HUB_EARTH_RADIUS      = 30
-const HUB_EARTH_POS         = new THREE.Vector3(-80, -20, -120)
-const HUB_MOON_RADIUS       = 7
-const HUB_MOON_ORBIT_RADIUS = 60
-const HUB_MOON_ORBIT_SPEED  = 0.0003
+const HUB_EARTH_RADIUS      = 10
+const HUB_EARTH_POS         = new THREE.Vector3(0, 0, 0)
+const HUB_MOON_RADIUS       = 3
+const HUB_MOON_ORBIT_RADIUS = 30
+const HUB_MOON_ORBIT_SPEED  = 0.003
 
 function createEarth(loader: THREE.TextureLoader): { group: THREE.Group; earthMesh: THREE.Mesh; cloudMesh: THREE.Mesh; dispose: () => void } {
   const group = new THREE.Group()
@@ -172,7 +172,7 @@ function createEarth(loader: THREE.TextureLoader): { group: THREE.Group; earthMe
   const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
   group.add(cloudMesh)
 
-  const atmoGeo = new THREE.SphereGeometry(HUB_EARTH_RADIUS + 2, 64, 64)
+  const atmoGeo = new THREE.SphereGeometry(HUB_EARTH_RADIUS + 1, 64, 64)
   const atmoMat = new THREE.ShaderMaterial({
     vertexShader:   `varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: `varying vec3 vNormal; void main() { float i = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0); gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * i; }`,
@@ -236,7 +236,7 @@ function createVenus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: T
   const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh     = new THREE.Mesh(venusGeo, venusMat)
   group.add(mesh)
-  const atmoGeo  = new THREE.SphereGeometry(9.3, 64, 64)
+  const atmoGeo  = new THREE.SphereGeometry(9.8, 64, 64)
   const atmoMat  = new THREE.MeshPhongMaterial({ map: atmoTex, shininess: 3, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
   const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
   group.add(atmoMesh)
@@ -262,7 +262,7 @@ function createJupiter(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   const jupiterTex = loader.load(base + 'earth/8k_jupiter.jpg')
   jupiterTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const jupiterGeo = new THREE.SphereGeometry(45, 64, 64)
+  const jupiterGeo = new THREE.SphereGeometry(110, 64, 64)
   const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
   group.add(mesh)
@@ -277,11 +277,11 @@ function createSaturn(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   saturnTex.colorSpace = THREE.SRGBColorSpace
   ringTex.colorSpace   = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const saturnGeo = new THREE.SphereGeometry(35, 64, 64)
+  const saturnGeo = new THREE.SphereGeometry(90, 64, 64)
   const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
   group.add(mesh)
-  const ringInner = 45, ringOuter = 84
+  const ringInner = 117, ringOuter = 216
   const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, 128)
   const pos = ringGeo.attributes.position as THREE.BufferAttribute
   const uv  = ringGeo.attributes.uv as THREE.BufferAttribute
@@ -302,7 +302,7 @@ function createUranus(loader: THREE.TextureLoader): { group: THREE.Group; mesh: 
   const uranusTex = loader.load(base + 'earth/2k_uranus.jpg')
   uranusTex.colorSpace = THREE.SRGBColorSpace
   const group     = new THREE.Group()
-  const uranusGeo = new THREE.SphereGeometry(20, 64, 64)
+  const uranusGeo = new THREE.SphereGeometry(40, 64, 64)
   const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.DoubleSide })
   const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
   group.add(mesh)
@@ -315,7 +315,7 @@ function createNeptune(loader: THREE.TextureLoader): { group: THREE.Group; mesh:
   const neptuneTex = loader.load(base + 'earth/2k_neptune.jpg')
   neptuneTex.colorSpace = THREE.SRGBColorSpace
   const group      = new THREE.Group()
-  const neptuneGeo = new THREE.SphereGeometry(19, 64, 64)
+  const neptuneGeo = new THREE.SphereGeometry(38, 64, 64)
   const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.DoubleSide })
   const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
   group.add(mesh)
@@ -389,11 +389,12 @@ export interface SpaceCanvasProps {
   cameraStateRef: React.MutableRefObject<CameraTransitionState>
   currentZone: string
   onTransitionComplete: () => void
+  navigateTo?: (zone: Zone) => void
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionComplete }: SpaceCanvasProps) {
+export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionComplete, navigateTo }: SpaceCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [loadProgress, setLoadProgress] = useState(0)
   const [loadDone,     setLoadDone]     = useState(false)
@@ -401,8 +402,10 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
   // Keep mutable refs in sync so animation loop always reads latest values
   const currentZoneRef = useRef(currentZone)
   const onCompleteRef  = useRef(onTransitionComplete)
+  const navigateToRef  = useRef(navigateTo)
   useEffect(() => { currentZoneRef.current = currentZone }, [currentZone])
   useEffect(() => { onCompleteRef.current  = onTransitionComplete }, [onTransitionComplete])
+  useEffect(() => { navigateToRef.current  = navigateTo }, [navigateTo])
 
   useEffect(() => {
     const container = containerRef.current
@@ -420,9 +423,9 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const scene  = new THREE.Scene()
     const w = container.clientWidth
     const h = container.clientHeight
-    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 2000)
-    camera.position.set(0, 0, 18)
-    camera.lookAt(0, 0, 0)
+    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 4000)
+    camera.position.set(0, 60, 120)
+    camera.lookAt(0, 20, 0)
 
     // ── Renderer ────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -435,12 +438,12 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const base = import.meta.env.BASE_URL
 
     const starsTex = sharedLoader.load(base + 'stars/8k_stars.jpg')
-    const skyGeo1  = new THREE.SphereGeometry(1800, 64, 64)
+    const skyGeo1  = new THREE.SphereGeometry(3000, 64, 64)
     const skyMat1  = new THREE.MeshBasicMaterial({ map: starsTex, side: THREE.BackSide })
     scene.add(new THREE.Mesh(skyGeo1, skyMat1))
 
     const milkyTex = sharedLoader.load(base + 'stars/8k_stars_milky_way.jpg')
-    const skyGeo2  = new THREE.SphereGeometry(1700, 64, 64)
+    const skyGeo2  = new THREE.SphereGeometry(2800, 64, 64)
     const skyMat2  = new THREE.MeshBasicMaterial({
       map: milkyTex, side: THREE.BackSide, transparent: true,
       opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -641,10 +644,10 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
 
     // ── 9. DESTINATION MARKERS ──────────────────────────────────────────────
     const markerConfigs = [
-      { name: 'ABOUT',    pos: [-12,  2, 0] as [number,number,number], labelPos: [-12,  4.5, 0] as [number,number,number], color: '#7721B1', hex: 0x7721b1, shape: 'icosahedron',  size: 1.2 },
-      { name: 'SKILLS',   pos: [ 12, -1, 0] as [number,number,number], labelPos: [ 12,  1.5, 0] as [number,number,number], color: '#3B8BD4', hex: 0x3b8bd4, shape: 'octahedron',   size: 1.0 },
-      { name: 'PROJECTS', pos: [  0, 10, 0] as [number,number,number], labelPos: [  0, 12.5, 0] as [number,number,number], color: '#22c55e', hex: 0x22c55e, shape: 'dodecahedron', size: 1.3 },
-      { name: 'CONTACT',  pos: [  0,-10, 0] as [number,number,number], labelPos: [  0, -7.5, 0] as [number,number,number], color: '#D7E2EA', hex: 0xd7e2ea, shape: 'torusknot',   size: 0.7 },
+      { name: 'ABOUT',    pos: [-6,  22,  -4] as [number,number,number], labelPos: [-6,  24.5,  -4] as [number,number,number], color: '#7721B1', hex: 0x7721b1, shape: 'icosahedron',  size: 1.2 },
+      { name: 'SKILLS',   pos: [ 6,  22,  -4] as [number,number,number], labelPos: [ 6,  24.5,  -4] as [number,number,number], color: '#3B8BD4', hex: 0x3b8bd4, shape: 'octahedron',   size: 1.0 },
+      { name: 'PROJECTS', pos: [ 0,  26,   4] as [number,number,number], labelPos: [ 0,  28.5,   4] as [number,number,number], color: '#22c55e', hex: 0x22c55e, shape: 'dodecahedron', size: 1.3 },
+      { name: 'CONTACT',  pos: [ 0,  18,   0] as [number,number,number], labelPos: [ 0,  20.5,   0] as [number,number,number], color: '#D7E2EA', hex: 0xd7e2ea, shape: 'torusknot',   size: 0.7 },
     ]
 
     const markerMeshes:    THREE.LineSegments[]      = []
@@ -701,6 +704,33 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       markerTextures.push(texture)
     }
 
+    // ── 9b. Mobile tap hit areas (invisible spheres for raycasting) ────────
+    const hitGeo   = new THREE.SphereGeometry(3, 8, 8)
+    const hitMat   = new THREE.MeshBasicMaterial({ visible: false })
+    const hitMeshes: THREE.Mesh[] = []
+    for (const cfg of markerConfigs) {
+      const hit = new THREE.Mesh(hitGeo, hitMat)
+      hit.position.set(...cfg.pos)
+      hit.userData.zone = cfg.name.toLowerCase() as Zone
+      scene.add(hit)
+      hitMeshes.push(hit)
+    }
+
+    const _raycaster = new THREE.Raycaster()
+    const _mouse     = new THREE.Vector2()
+    const onPointerDown = (e: PointerEvent) => {
+      if (!isMobile || !navigateToRef.current) return
+      const rect = renderer.domElement.getBoundingClientRect()
+      _mouse.set(
+        ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+        -((e.clientY - rect.top)  / rect.height) * 2 + 1,
+      )
+      _raycaster.setFromCamera(_mouse, camera)
+      const hits = _raycaster.intersectObjects(hitMeshes)
+      if (hits.length > 0) navigateToRef.current(hits[0].object.userData.zone as Zone)
+    }
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
+
     // ── 10. Earth (decorative) ───────────────────────────────────────────────
     const earthObj = createEarth(sharedLoader)
     scene.add(earthObj.group)
@@ -711,42 +741,55 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
 
     // ── 10.5. Planets (static decorative) ────────────────────────────────────
     const mercuryObj = createMercury(sharedLoader)
-    mercuryObj.group.position.set(60, 15, -50)
+    mercuryObj.group.position.set(-900, 0, 20)
     scene.add(mercuryObj.group)
 
     const venusObj = createVenus(sharedLoader)
-    venusObj.group.position.set(-80, -8, -70)
+    venusObj.group.position.set(-650, 0, -30)
     scene.add(venusObj.group)
 
     const marsObj = createMars(sharedLoader)
-    marsObj.group.position.set(-60, 30, 80)
+    marsObj.group.position.set(300, 0, 20)
     scene.add(marsObj.group)
 
     const jupiterObj = createJupiter(sharedLoader)
-    jupiterObj.group.position.set(160, -20, -150)
+    jupiterObj.group.position.set(800, 0, -40)
     scene.add(jupiterObj.group)
 
     const saturnObj = createSaturn(sharedLoader)
-    saturnObj.group.position.set(-150, 15, -130)
+    saturnObj.group.position.set(1400, 0, 30)
     scene.add(saturnObj.group)
 
     const uranusObj = createUranus(sharedLoader)
-    uranusObj.group.position.set(50, 60, -180)
+    uranusObj.group.position.set(1900, 0, -20)
     scene.add(uranusObj.group)
 
     const neptuneObj = createNeptune(sharedLoader)
-    neptuneObj.group.position.set(180, -15, 60)
+    neptuneObj.group.position.set(2300, 0, 10)
     scene.add(neptuneObj.group)
 
     // ── 11. Sun ───────────────────────────────────────────────────────────────
     const sunTex      = sharedLoader.load(base + 'stars/8k_sun.jpg')
-    const sunGeo      = new THREE.SphereGeometry(18, 64, 64)
+    const sunGeo      = new THREE.SphereGeometry(80, 64, 64)
     const sunMat      = new THREE.MeshBasicMaterial({ map: sunTex })
     const sunMesh     = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(400, 100, 300)
+    sunMesh.position.set(-1200, 0, 0)
     scene.add(sunMesh)
 
-    const sunGlowGeo  = new THREE.SphereGeometry(22, 32, 32)
+    const coronaGeo  = new THREE.SphereGeometry(92, 32, 32)
+    const coronaMat  = new THREE.MeshBasicMaterial({
+      color:       0xff9900,
+      transparent: true,
+      opacity:     0.08,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
+    coronaMesh.position.set(-1200, 0, 0)
+    scene.add(coronaMesh)
+
+    const sunGlowGeo  = new THREE.SphereGeometry(100, 32, 32)
     const sunGlowMat  = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
@@ -756,11 +799,24 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       side:        THREE.BackSide,
     })
     const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
-    sunGlowMesh.position.set(400, 100, 300)
+    sunGlowMesh.position.set(-1200, 0, 0)
     scene.add(sunGlowMesh)
 
+    // Faint path line along X axis connecting all planets
+    const pathGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-1400, 0, 0),
+      new THREE.Vector3(2500, 0, 0),
+    ])
+    const pathMat = new THREE.LineBasicMaterial({
+      color:       0x334455,
+      transparent: true,
+      opacity:     0.15,
+      depthWrite:  false,
+    })
+    scene.add(new THREE.Line(pathGeo, pathMat))
+
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.0)
-    sunLight.position.set(400, 100, 300)
+    sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
@@ -792,14 +848,21 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       const camState = cameraStateRef.current
 
       if (camState.active) {
-        camState.progress = Math.min(camState.progress + dt / 2.0, 1.0)
+        camState.progress = Math.min(camState.progress + dt / 3.0, 1.0)
         const p    = camState.progress
         const ease = p * p * (3 - 2 * p)
 
+        const fromPos = new THREE.Vector3(...camState.from.position)
+        const toPos   = new THREE.Vector3(...camState.to.position)
+        const mid = fromPos.clone().lerp(toPos, 0.5)
+        const midLength = mid.length()
+        const minArcHeight = 40
+        if (midLength < minArcHeight) mid.normalize().multiplyScalar(minArcHeight)
+        const t1 = 1 - ease
         camera.position.set(
-          camState.from.position[0] + (camState.to.position[0] - camState.from.position[0]) * ease,
-          camState.from.position[1] + (camState.to.position[1] - camState.from.position[1]) * ease,
-          camState.from.position[2] + (camState.to.position[2] - camState.from.position[2]) * ease,
+          t1 * t1 * fromPos.x + 2 * t1 * ease * mid.x + ease * ease * toPos.x,
+          t1 * t1 * fromPos.y + 2 * t1 * ease * mid.y + ease * ease * toPos.y,
+          t1 * t1 * fromPos.z + 2 * t1 * ease * mid.z + ease * ease * toPos.z,
         )
         camera.lookAt(
           camState.from.lookAt[0] + (camState.to.lookAt[0] - camState.from.lookAt[0]) * ease,
@@ -816,9 +879,9 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
         }
       } else if (currentZoneRef.current === 'hub') {
         const speed = isMobile ? 0.03 : 0.05
-        camera.position.x = 18 * Math.cos(t * speed + Math.PI / 2)
-        camera.position.z = 18 * Math.sin(t * speed + Math.PI / 2)
-        camera.position.y = Math.sin(t * 0.08) * 0.5
+        camera.position.x = 400 * Math.cos(t * speed + Math.PI / 2)
+        camera.position.z = 400 * Math.sin(t * speed + Math.PI / 2)
+        camera.position.y = 200 + Math.sin(t * 0.08) * 10
         camera.lookAt(0, 0, 0)
       } else {
         const base = camState.to.position
@@ -927,6 +990,9 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
       renderer.dispose()
 
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      hitGeo.dispose(); hitMat.dispose()
+
       skyGeo1.dispose(); skyMat1.dispose(); starsTex.dispose()
       skyGeo2.dispose(); skyMat2.dispose(); milkyTex.dispose()
       nebulaBgGeo?.dispose(); nebulaBgMat?.dispose()
@@ -962,7 +1028,9 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       uranusObj.dispose()
       neptuneObj.dispose()
       sunGeo.dispose(); sunMat.dispose(); sunTex.dispose()
+      coronaGeo.dispose(); coronaMat.dispose()
       sunGlowGeo.dispose(); sunGlowMat.dispose()
+      pathGeo.dispose(); pathMat.dispose()
     }
   }, [cameraStateRef])
 
