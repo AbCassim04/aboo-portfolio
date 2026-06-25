@@ -165,7 +165,7 @@ const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
 const ASTRONAUT_ORBIT_RADIUS = 22
 const ASTRONAUT_SPEED        = 0.0006
-const ASTRONAUT_SCALE        = 10.0
+const ASTRONAUT_SCALE        = 0.5
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -559,6 +559,16 @@ function createAstronaut(): Promise<{ group: THREE.Group; dispose: () => void }>
             const mesh = child as THREE.Mesh
             mesh.castShadow    = false
             mesh.receiveShadow = false
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            mats.forEach(m => {
+              if (m) {
+                m.side = THREE.DoubleSide
+                if ((m as THREE.MeshStandardMaterial).color) {
+                  (m as THREE.MeshStandardMaterial).color.set(0xcccccc)
+                }
+                m.needsUpdate = true
+              }
+            })
           }
         })
         dracoLoader.dispose()
@@ -988,10 +998,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
-        const markerGeo = new THREE.SphereGeometry(3, 8, 8)
-        const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000 })
-        const marker = new THREE.Mesh(markerGeo, markerMat)
-        astronautGroup.add(marker)
+        const astroLight = new THREE.AmbientLight(0xffffff, 3)
+        scene.add(astroLight)
         const astronautLight = new THREE.PointLight(0xffffff, 2, 50)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
