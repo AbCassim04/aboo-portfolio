@@ -163,9 +163,9 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
-const ASTRONAUT_ORBIT_RADIUS = 20
+const ASTRONAUT_ORBIT_RADIUS = 22
 const ASTRONAUT_SPEED        = 0.0006
-const ASTRONAUT_SCALE        = 0.8
+const ASTRONAUT_SCALE        = 5.0
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -988,6 +988,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
+        const astronautLight = new THREE.PointLight(0xffffff, 2, 50)
+        astronautGroup.userData.light = astronautLight
+        scene.add(astronautLight)
       })
     }, 2000)
 
@@ -1194,6 +1197,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup.rotation.x += 0.001
         astronautGroup.rotation.y += 0.0008
         astronautGroup.rotation.z += 0.0005
+        if (astronautGroup.userData.light) {
+          (astronautGroup.userData.light as THREE.PointLight).position.copy(astronautGroup.position)
+        }
       }
       mercuryObj.mesh.rotation.y += 0.0008
       venusObj.mesh.rotation.y   -= 0.0001
