@@ -114,26 +114,6 @@ export default function FlightHUD({
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 20, pointerEvents: 'none' }}>
 
-      <button
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 9999,
-          background: 'red',
-          color: 'white',
-          padding: '20px',
-          fontSize: '20px',
-          pointerEvents: 'auto',
-        }}
-        onTouchStart={() => { console.log('TOUCH WORKS'); inputRef.current.thrust = 1 }}
-        onTouchEnd={() => { inputRef.current.thrust = 0 }}
-        onClick={() => { console.log('CLICK WORKS'); inputRef.current.thrust = 1 }}
-      >
-        TEST BUTTON
-      </button>
-
       {/* Exit button — top right */}
       <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', pointerEvents: 'auto' }}>
         <motion.button
