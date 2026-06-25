@@ -17,6 +17,11 @@ export function useFlightControls(): React.MutableRefObject<FlightInput> {
   const inputRef = useRef<FlightInput>({ thrust: 0, brake: 0, yaw: 0, pitch: 0, roll: 0, vertical: 0, boost: false, land: false, pitchUp: false, pitchDown: false })
 
   useEffect(() => {
+    // On touch devices the keyboard loop would overwrite button-set values every frame.
+    // Touch buttons write directly to inputRef, so skip the loop entirely on mobile.
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+    if (isTouch) return
+
     const keys = new Set<string>()
 
     const onKeyDown = (e: KeyboardEvent) => {
