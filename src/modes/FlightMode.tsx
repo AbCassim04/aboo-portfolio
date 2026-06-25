@@ -163,6 +163,9 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
+const ASTRONAUT_ORBIT_RADIUS = 20
+const ASTRONAUT_SPEED        = 0.0006
+const ASTRONAUT_SCALE        = 0.8
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -534,6 +537,50 @@ function createJWST(): Promise<{ group: THREE.Group; dispose: () => void }> {
       },
       (progress) => { console.log('JWST loading:', progress.loaded, '/', progress.total) },
       (error)    => { console.error('❌ JWST failed to load', error); reject(error) },
+    )
+  })
+}
+
+function createAstronaut(): Promise<{ group: THREE.Group; dispose: () => void }> {
+  return new Promise((resolve, reject) => {
+    const base        = import.meta.env.BASE_URL
+    const dracoLoader = new DRACOLoader()
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
+    const loader = new GLTFLoader()
+    loader.setDRACOLoader(dracoLoader)
+    loader.load(
+      base + 'models/astronaut-compressed.glb',
+      (gltf) => {
+        console.log('✅ Astronaut loaded')
+        const group = gltf.scene
+        group.scale.setScalar(ASTRONAUT_SCALE)
+        group.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh
+            mesh.castShadow    = false
+            mesh.receiveShadow = false
+          }
+        })
+        dracoLoader.dispose()
+        resolve({
+          group,
+          dispose: () => {
+            group.traverse((child) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh
+                mesh.geometry?.dispose()
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach(m => m.dispose())
+                } else {
+                  mesh.material?.dispose()
+                }
+              }
+            })
+          },
+        })
+      },
+      undefined,
+      (error) => { console.error('❌ Astronaut failed to load', error); reject(error) },
     )
   })
 }
@@ -933,6 +980,17 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       }, 3000)
     }
 
+    let astronautGroup:   THREE.Group | null = null
+    let astronautAngle    = Math.PI * 0.3
+    let astronautDispose: (() => void) | null = null
+    setTimeout(() => {
+      createAstronaut().then(({ group, dispose }) => {
+        astronautGroup   = group
+        astronautDispose = dispose
+        scene.add(astronautGroup)
+      })
+    }, 2000)
+
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader, isMobile)
     mercuryObj.group.position.set(-900, 0, 20)
@@ -1126,6 +1184,17 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         )
         jwstGroup.rotation.y = -jwstAngle + Math.PI / 2
       }
+      if (astronautGroup) {
+        astronautAngle += ASTRONAUT_SPEED
+        astronautGroup.position.set(
+          earthObj.group.position.x + Math.cos(astronautAngle) * ASTRONAUT_ORBIT_RADIUS,
+          earthObj.group.position.y + Math.sin(astronautAngle * 0.5) * 5,
+          earthObj.group.position.z + Math.sin(astronautAngle) * ASTRONAUT_ORBIT_RADIUS,
+        )
+        astronautGroup.rotation.x += 0.001
+        astronautGroup.rotation.y += 0.0008
+        astronautGroup.rotation.z += 0.0005
+      }
       mercuryObj.mesh.rotation.y += 0.0008
       venusObj.mesh.rotation.y   -= 0.0001
       venusObj.atmoMesh.rotation.y -= 0.00015
@@ -1293,8 +1362,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
       earthObj.dispose()
       moonObj.dispose()
-      if (issDispose)  issDispose()
-      if (jwstDispose) jwstDispose()
+      if (issDispose)       issDispose()
+      if (jwstDispose)      jwstDispose()
+      if (astronautDispose) astronautDispose()
       mercuryObj.dispose()
       venusObj.dispose()
       marsObj.dispose()
