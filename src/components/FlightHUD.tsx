@@ -26,7 +26,13 @@ export default function FlightHUD({
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
-  const radarRef  = useRef<HTMLCanvasElement>(null)
+  const radarRef      = useRef<HTMLCanvasElement>(null)
+  const leftStickRef  = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
+  const rightStickRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
+  const leftTouchId   = useRef<number | null>(null)
+  const rightTouchId  = useRef<number | null>(null)
+  const leftBaseRef   = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const rightBaseRef  = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
 
   // Draw radar whenever position or planets change
   useEffect(() => {
@@ -94,6 +100,84 @@ export default function FlightHUD({
     ctx.lineWidth   = 1.5
     ctx.stroke()
   }, [ufoX, ufoY, planetDots])
+
+  // Dual joystick touch handling
+  useEffect(() => {
+    if (!isMobile) return
+
+    const DEAD_ZONE  = 8
+    const MAX_RADIUS = 50
+
+    function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
+
+    function onTouchStart(e: TouchEvent) {
+      for (const t of Array.from(e.changedTouches)) {
+        const isLeft = t.clientX < window.innerWidth / 2
+        if (isLeft && leftTouchId.current === null) {
+          leftTouchId.current  = t.identifier
+          leftBaseRef.current  = { x: t.clientX, y: t.clientY }
+          leftStickRef.current = { active: true, x: 0, y: 0 }
+        } else if (!isLeft && rightTouchId.current === null) {
+          rightTouchId.current  = t.identifier
+          rightBaseRef.current  = { x: t.clientX, y: t.clientY }
+          rightStickRef.current = { active: true, x: 0, y: 0 }
+        }
+      }
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      e.preventDefault()
+      for (const t of Array.from(e.changedTouches)) {
+        if (t.identifier === leftTouchId.current) {
+          const dx = t.clientX - leftBaseRef.current.x
+          const dy = t.clientY - leftBaseRef.current.y
+          const nx = clamp(dx / MAX_RADIUS, -1, 1)
+          const ny = clamp(dy / MAX_RADIUS, -1, 1)
+          inputRef.current.yaw    = Math.abs(dx) > DEAD_ZONE ? nx : 0
+          inputRef.current.thrust = Math.abs(dy) > DEAD_ZONE ? (dy < 0 ? -ny : 0) : 0
+          inputRef.current.brake  = Math.abs(dy) > DEAD_ZONE ? (dy > 0 ? ny  : 0) : 0
+        }
+        if (t.identifier === rightTouchId.current) {
+          const dx = t.clientX - rightBaseRef.current.x
+          const dy = t.clientY - rightBaseRef.current.y
+          const ny = clamp(dy / MAX_RADIUS, -1, 1)
+          const nx = clamp(dx / MAX_RADIUS, -1, 1)
+          inputRef.current.pitch    = Math.abs(dy) > DEAD_ZONE ? ny : 0
+          inputRef.current.vertical = Math.abs(dx) > DEAD_ZONE ? -nx : 0
+        }
+      }
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      for (const t of Array.from(e.changedTouches)) {
+        if (t.identifier === leftTouchId.current) {
+          leftTouchId.current         = null
+          leftStickRef.current.active = false
+          inputRef.current.yaw    = 0
+          inputRef.current.thrust = 0
+          inputRef.current.brake  = 0
+        }
+        if (t.identifier === rightTouchId.current) {
+          rightTouchId.current         = null
+          rightStickRef.current.active = false
+          inputRef.current.pitch    = 0
+          inputRef.current.vertical = 0
+        }
+      }
+    }
+
+    window.addEventListener('touchstart',  onTouchStart, { passive: false })
+    window.addEventListener('touchmove',   onTouchMove,  { passive: false })
+    window.addEventListener('touchend',    onTouchEnd,   { passive: false })
+    window.addEventListener('touchcancel', onTouchEnd,   { passive: false })
+
+    return () => {
+      window.removeEventListener('touchstart',  onTouchStart)
+      window.removeEventListener('touchmove',   onTouchMove)
+      window.removeEventListener('touchend',    onTouchEnd)
+      window.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [isMobile, inputRef])
 
   // Poll inputRef for boost changes to drive the notification toast
   useEffect(() => {
@@ -315,78 +399,77 @@ export default function FlightHUD({
         <span style={{ color: 'rgba(215,226,234,0.3)', fontSize: '0.6rem', letterSpacing: '0.1em' }}>NAV</span>
       </div>
 
-      {/* Arrow controls — mobile only */}
+      {/* Dual joystick — mobile only */}
       {isMobile && (
         <>
-          {/* Left side — 4 directional arrows */}
+          {/* Left joystick — thrust + yaw */}
           <div style={{
-            position: 'absolute', bottom: '6rem', left: '1.5rem',
-            display: 'grid',
-            gridTemplateColumns: '52px 52px 52px',
-            gridTemplateRows: '52px 52px',
-            gap: '0.4rem',
-            pointerEvents: 'auto',
+            position:       'absolute',
+            bottom:         '7rem',
+            left:           '2rem',
+            width:          '120px',
+            height:         '120px',
+            borderRadius:   '50%',
+            background:     'rgba(155,79,192,0.12)',
+            border:         '1px solid rgba(155,79,192,0.35)',
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            pointerEvents:  'none',
+            touchAction:    'none',
           }}>
-            <div style={{ gridColumn: '2', gridRow: '1' }}>
-              <button
-                onTouchStart={() => { inputRef.current.thrust = 1 }}
-                onTouchEnd={() => { inputRef.current.thrust = 0 }}
-                onTouchCancel={() => { inputRef.current.thrust = 0 }}
-                style={arrowBtnStyle}
-              >▲</button>
-            </div>
-            <div style={{ gridColumn: '1', gridRow: '2' }}>
-              <button
-                onTouchStart={() => { inputRef.current.yaw = -1 }}
-                onTouchEnd={() => { inputRef.current.yaw = 0 }}
-                onTouchCancel={() => { inputRef.current.yaw = 0 }}
-                style={arrowBtnStyle}
-              >◄</button>
-            </div>
-            <div style={{ gridColumn: '2', gridRow: '2' }}>
-              <button
-                onTouchStart={() => { inputRef.current.brake = 1 }}
-                onTouchEnd={() => { inputRef.current.brake = 0 }}
-                onTouchCancel={() => { inputRef.current.brake = 0 }}
-                style={arrowBtnStyle}
-              >▼</button>
-            </div>
-            <div style={{ gridColumn: '3', gridRow: '2' }}>
-              <button
-                onTouchStart={() => { inputRef.current.yaw = 1 }}
-                onTouchEnd={() => { inputRef.current.yaw = 0 }}
-                onTouchCancel={() => { inputRef.current.yaw = 0 }}
-                style={arrowBtnStyle}
-              >►</button>
-            </div>
+            <div style={{
+              width:        '40px',
+              height:       '40px',
+              borderRadius: '50%',
+              background:   'rgba(155,79,192,0.5)',
+              border:       '1px solid rgba(196,181,253,0.6)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>FWD</div>
+            <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>BRAKE</div>
+            <div style={{ position: 'absolute', left: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>◄</div>
+            <div style={{ position: 'absolute', right: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>►</div>
           </div>
 
-          {/* Right side — up/down */}
+          {/* Right joystick — pitch + vertical */}
           <div style={{
-            position: 'absolute', bottom: '6rem', right: '1.5rem',
-            display: 'flex', flexDirection: 'column', gap: '0.4rem',
-            pointerEvents: 'auto',
+            position:       'absolute',
+            bottom:         '7rem',
+            right:          '2rem',
+            width:          '120px',
+            height:         '120px',
+            borderRadius:   '50%',
+            background:     'rgba(155,79,192,0.12)',
+            border:         '1px solid rgba(155,79,192,0.35)',
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            pointerEvents:  'none',
+            touchAction:    'none',
           }}>
-            <button
-              onTouchStart={() => { inputRef.current.vertical = 1 }}
-              onTouchEnd={() => { inputRef.current.vertical = 0 }}
-              onTouchCancel={() => { inputRef.current.vertical = 0 }}
-              style={arrowBtnStyle}
-            >↑</button>
-            <button
-              onTouchStart={() => { inputRef.current.vertical = -1 }}
-              onTouchEnd={() => { inputRef.current.vertical = 0 }}
-              onTouchCancel={() => { inputRef.current.vertical = 0 }}
-              style={arrowBtnStyle}
-            >↓</button>
+            <div style={{
+              width:        '40px',
+              height:       '40px',
+              borderRadius: '50%',
+              background:   'rgba(155,79,192,0.5)',
+              border:       '1px solid rgba(196,181,253,0.6)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>UP</div>
+            <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>DOWN</div>
+            <div style={{ position: 'absolute', left: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>◄</div>
+            <div style={{ position: 'absolute', right: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>►</div>
           </div>
 
-          {/* Bottom center — BOOST and LAND */}
+          {/* BOOST + LAND — bottom center */}
           <div style={{
-            position: 'absolute', bottom: '1.5rem', left: '50%',
+            position:  'absolute',
+            bottom:    '1.5rem',
+            left:      '50%',
             transform: 'translateX(-50%)',
-            display: 'flex', gap: '1rem',
-            pointerEvents: 'auto',
+            display:   'flex',
+            gap:       '1rem',
           }}>
             <button
               onTouchStart={() => {
@@ -397,19 +480,27 @@ export default function FlightHUD({
               }}
               style={{
                 ...arrowBtnStyle,
-                background: isBoosting ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.3)',
-                border: `1px solid rgba(139,92,246,${isBoosting ? '1' : '0.6'})`,
-                fontSize: '0.6rem',
+                background:    'rgba(139,92,246,0.3)',
+                border:        '1px solid rgba(139,92,246,0.6)',
+                fontSize:      '0.6rem',
                 letterSpacing: '0.1em',
-                width: '64px',
-                boxShadow: isBoosting ? '0 0 15px rgba(139,92,246,0.8)' : 'none',
+                width:         '64px',
+                pointerEvents: 'auto',
               }}
-            >{isBoosting ? 'BOOSTING' : 'BOOST'}</button>
+            >BOOST</button>
             <button
               onTouchStart={() => { inputRef.current.land = true }}
               onTouchEnd={() => { inputRef.current.land = false }}
               onTouchCancel={() => { inputRef.current.land = false }}
-              style={{ ...arrowBtnStyle, background: 'rgba(34,197,94,0.3)', border: '1px solid rgba(34,197,94,0.6)', fontSize: '0.6rem', letterSpacing: '0.1em', width: '64px' }}
+              style={{
+                ...arrowBtnStyle,
+                background:    'rgba(34,197,94,0.3)',
+                border:        '1px solid rgba(34,197,94,0.6)',
+                fontSize:      '0.6rem',
+                letterSpacing: '0.1em',
+                width:         '64px',
+                pointerEvents: 'auto',
+              }}
             >LAND</button>
           </div>
         </>
