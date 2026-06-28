@@ -38,7 +38,8 @@ export function useUFOPhysics(
     _forward.set(0, 0, -1).applyEuler(state.rotation)
 
     // Thrust / brake
-    if (inp.thrust > 0) state.velocity.addScaledVector(_forward, ACCEL * inp.thrust)
+    const accel = inp.boost ? ACCEL * 8 : ACCEL
+    if (inp.thrust > 0) state.velocity.addScaledVector(_forward, accel * inp.thrust)
     if (inp.brake  > 0) state.velocity.multiplyScalar(0.95)
 
     // Vertical (world-space Y — more intuitive than local frame)
