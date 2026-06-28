@@ -26,6 +26,8 @@ export default function FlightHUD({
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
+  const [leftKnob,   setLeftKnob]   = useState({ x: 0, y: 0 })
+  const [rightKnob,  setRightKnob]  = useState({ x: 0, y: 0 })
   const radarRef      = useRef<HTMLCanvasElement>(null)
   const leftStickRef  = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
   const rightStickRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
@@ -129,8 +131,12 @@ export default function FlightHUD({
       e.preventDefault()
       for (const t of Array.from(e.changedTouches)) {
         if (t.identifier === leftTouchId.current) {
-          const dx = t.clientX - leftBaseRef.current.x
-          const dy = t.clientY - leftBaseRef.current.y
+          const dx   = t.clientX - leftBaseRef.current.x
+          const dy   = t.clientY - leftBaseRef.current.y
+          const dist = Math.sqrt(dx*dx + dy*dy)
+          const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
+          const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
+          setLeftKnob({ x: cx, y: cy })
           const nx = clamp(dx / MAX_RADIUS, -1, 1)
           const ny = clamp(dy / MAX_RADIUS, -1, 1)
           inputRef.current.yaw    = Math.abs(dx) > DEAD_ZONE ? nx : 0
@@ -138,8 +144,12 @@ export default function FlightHUD({
           inputRef.current.brake  = Math.abs(dy) > DEAD_ZONE ? (dy > 0 ? ny  : 0) : 0
         }
         if (t.identifier === rightTouchId.current) {
-          const dx = t.clientX - rightBaseRef.current.x
-          const dy = t.clientY - rightBaseRef.current.y
+          const dx   = t.clientX - rightBaseRef.current.x
+          const dy   = t.clientY - rightBaseRef.current.y
+          const dist = Math.sqrt(dx*dx + dy*dy)
+          const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
+          const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
+          setRightKnob({ x: cx, y: cy })
           const ny = clamp(dy / MAX_RADIUS, -1, 1)
           const nx = clamp(dx / MAX_RADIUS, -1, 1)
           inputRef.current.vertical = Math.abs(dy) > DEAD_ZONE ? -ny : 0
@@ -153,6 +163,7 @@ export default function FlightHUD({
         if (t.identifier === leftTouchId.current) {
           leftTouchId.current         = null
           leftStickRef.current.active = false
+          setLeftKnob({ x: 0, y: 0 })
           inputRef.current.yaw    = 0
           inputRef.current.thrust = 0
           inputRef.current.brake  = 0
@@ -160,6 +171,7 @@ export default function FlightHUD({
         if (t.identifier === rightTouchId.current) {
           rightTouchId.current         = null
           rightStickRef.current.active = false
+          setRightKnob({ x: 0, y: 0 })
           inputRef.current.pitch    = 0
           inputRef.current.vertical = 0
         }
@@ -412,9 +424,6 @@ export default function FlightHUD({
             borderRadius:   '50%',
             background:     'rgba(155,79,192,0.12)',
             border:         '1px solid rgba(155,79,192,0.35)',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
             pointerEvents:  'none',
             touchAction:    'none',
           }}>
@@ -422,9 +431,16 @@ export default function FlightHUD({
               width:        '40px',
               height:       '40px',
               borderRadius: '50%',
-              background:   'rgba(155,79,192,0.5)',
-              border:       '1px solid rgba(196,181,253,0.6)',
+              background:   'rgba(155,79,192,0.7)',
+              border:       '2px solid rgba(196,181,253,0.8)',
               pointerEvents: 'none',
+              position:     'absolute',
+              top:          '50%',
+              left:         '50%',
+              marginTop:    '-20px',
+              marginLeft:   '-20px',
+              transform:    `translate(${leftKnob.x}px, ${leftKnob.y}px)`,
+              transition:   leftTouchId.current !== null ? 'none' : 'transform 0.15s ease',
             }} />
             <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>FWD</div>
             <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>BRAKE</div>
@@ -442,9 +458,6 @@ export default function FlightHUD({
             borderRadius:   '50%',
             background:     'rgba(155,79,192,0.12)',
             border:         '1px solid rgba(155,79,192,0.35)',
-            display:        'flex',
-            alignItems:     'center',
-            justifyContent: 'center',
             pointerEvents:  'none',
             touchAction:    'none',
           }}>
@@ -452,9 +465,16 @@ export default function FlightHUD({
               width:        '40px',
               height:       '40px',
               borderRadius: '50%',
-              background:   'rgba(155,79,192,0.5)',
-              border:       '1px solid rgba(196,181,253,0.6)',
+              background:   'rgba(155,79,192,0.7)',
+              border:       '2px solid rgba(196,181,253,0.8)',
               pointerEvents: 'none',
+              position:     'absolute',
+              top:          '50%',
+              left:         '50%',
+              marginTop:    '-20px',
+              marginLeft:   '-20px',
+              transform:    `translate(${rightKnob.x}px, ${rightKnob.y}px)`,
+              transition:   rightTouchId.current !== null ? 'none' : 'transform 0.15s ease',
             }} />
             <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>UP</div>
             <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>DOWN</div>
