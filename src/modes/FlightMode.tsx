@@ -957,6 +957,32 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       scene.add(new THREE.Points(trailGeo, trailMat))
     }
 
+    // Boost trail — bright cyan, additive, fades in/out with boost toggle
+    const BOOST_TRAIL_COUNT = 60
+    let boostTrailGeo: THREE.BufferGeometry | null = null
+    let boostTrailMat: THREE.PointsMaterial | null = null
+    let boostTrailPos: Float32Array         | null = null
+
+    if (!isMobile) {
+      const p0 = ufoStateRef.current.position
+      boostTrailPos = new Float32Array(BOOST_TRAIL_COUNT * 3)
+      for (let i = 0; i < BOOST_TRAIL_COUNT * 3; i += 3) {
+        boostTrailPos[i] = p0.x; boostTrailPos[i+1] = p0.y; boostTrailPos[i+2] = p0.z
+      }
+      boostTrailGeo = new THREE.BufferGeometry()
+      boostTrailGeo.setAttribute('position', new THREE.BufferAttribute(boostTrailPos, 3))
+      boostTrailMat = new THREE.PointsMaterial({
+        color:           0x7df9ff,
+        size:            0.2,
+        sizeAttenuation: true,
+        transparent:     true,
+        opacity:         0,
+        blending:        THREE.AdditiveBlending,
+        depthWrite:      false,
+      })
+      scene.add(new THREE.Points(boostTrailGeo, boostTrailMat))
+    }
+
     // ── 11. Boundary sphere ────────────────────────────────────────────────
     const boundGeo = new THREE.SphereGeometry(2600, 16, 12)
     const boundMat = new THREE.MeshBasicMaterial({ color: 0x7721b1, wireframe: true, transparent: true, opacity: 0.02 })
@@ -1275,6 +1301,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       for (const m of ufoLightMats) m.opacity = lightOp
 
       // Trail
+      const boostOn = inputRef.current.boost
       if (trailPos && trailGeo && trailMat) {
         for (let i = TRAIL_COUNT - 1; i > 0; i--) {
           trailPos[i*3]   = trailPos[(i-1)*3]
@@ -1283,7 +1310,18 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         }
         trailPos[0] = ufoPos.x; trailPos[1] = ufoPos.y; trailPos[2] = ufoPos.z
         trailGeo.attributes.position.needsUpdate = true
-        trailMat.opacity = entryDone ? 0.6 : 0
+        trailMat.opacity = entryDone ? (boostOn ? 0.15 : 0.55) : 0
+      }
+      if (boostTrailPos && boostTrailGeo && boostTrailMat) {
+        for (let i = BOOST_TRAIL_COUNT - 1; i > 0; i--) {
+          boostTrailPos[i*3]   = boostTrailPos[(i-1)*3]
+          boostTrailPos[i*3+1] = boostTrailPos[(i-1)*3+1]
+          boostTrailPos[i*3+2] = boostTrailPos[(i-1)*3+2]
+        }
+        boostTrailPos[0] = ufoPos.x; boostTrailPos[1] = ufoPos.y; boostTrailPos[2] = ufoPos.z
+        boostTrailGeo.attributes.position.needsUpdate = true
+        const targetOp = entryDone && boostOn ? 0.85 : 0
+        boostTrailMat.opacity += (targetOp - boostTrailMat.opacity) * 0.08
       }
 
       // ── Destination animations ─────────────────────────────────────────
@@ -1330,7 +1368,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       hudFrame++
       if (hudFrame % 6 === 0) {
         const vel      = state.velocity.length()
-        const topSpeed = inputRef.current.boost ? 2.0 : 0.4
+        const topSpeed = inputRef.current.boost ? 3.2 : 0.4
         setSpeed(Math.min(vel / topSpeed, 1))
         setIsBoosting(inputRef.current.boost)
         setUfoXY({ x: ufoPos.x, y: ufoPos.y })
@@ -1399,6 +1437,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       for (const m of ufoLightMats) m.dispose()
 
       trailGeo?.dispose(); trailMat?.dispose()
+      boostTrailGeo?.dispose(); boostTrailMat?.dispose()
 
       boundGeo.dispose(); boundMat.dispose()
 
