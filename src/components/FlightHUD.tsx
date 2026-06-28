@@ -142,8 +142,8 @@ export default function FlightHUD({
           const dy = t.clientY - rightBaseRef.current.y
           const ny = clamp(dy / MAX_RADIUS, -1, 1)
           const nx = clamp(dx / MAX_RADIUS, -1, 1)
-          inputRef.current.pitch    = Math.abs(dy) > DEAD_ZONE ? ny : 0
-          inputRef.current.vertical = Math.abs(dx) > DEAD_ZONE ? -nx : 0
+          inputRef.current.vertical = Math.abs(dy) > DEAD_ZONE ? -ny : 0
+          inputRef.current.pitch    = Math.abs(dx) > DEAD_ZONE ? nx : 0
         }
       }
     }
