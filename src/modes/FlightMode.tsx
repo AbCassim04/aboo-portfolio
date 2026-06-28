@@ -7,6 +7,11 @@ import { useUFOPhysics }     from '../hooks/useUFOPhysics'
 import FlightHUD             from '../components/FlightHUD'
 import type { PlanetDot }    from '../components/FlightHUD'
 import LoadingScreen         from '../components/LoadingScreen'
+import AboutOverlay          from '../overlays/AboutOverlay'
+import SkillsOverlay         from '../overlays/SkillsOverlay'
+import ProjectsOverlay       from '../overlays/ProjectsOverlay'
+import ContactOverlay        from '../overlays/ContactOverlay'
+import type { Zone as NavZone } from '../hooks/useCameraNavigation'
 
 // ── GLSL shaders ───────────────────────────────────────────────────────────
 
@@ -617,6 +622,20 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
   const [fps,           setFps]           = useState(0)
   const [loadProgress,  setLoadProgress]  = useState(0)
   const [loadDone,      setLoadDone]      = useState(false)
+
+  type Zone = 'flight' | 'about' | 'skills' | 'projects' | 'contact'
+  const [currentZone,    setCurrentZone]    = useState<Zone>('flight')
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const currentZoneRef = useRef<Zone>('flight')
+
+  const navigateTo = (zone: Zone) => {
+    setIsTransitioning(true)
+    setTimeout(() => {
+      setCurrentZone(zone)
+      currentZoneRef.current = zone
+      setIsTransitioning(false)
+    }, 300)
+  }
 
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
@@ -1387,9 +1406,19 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
           landingFired = true
           if (minLabel === 'M87*') {
             onEnterBlackHoleRef.current()
-          } else {
-            onExitRef.current()
+          } else if (minLabel === 'ABOUT') {
+            navigateTo('about')
+          } else if (minLabel === 'SKILLS') {
+            navigateTo('skills')
+          } else if (minLabel === 'PROJECTS') {
+            navigateTo('projects')
+          } else if (minLabel === 'CONTACT') {
+            navigateTo('contact')
           }
+        }
+        // Reset landingFired when overlay is closed so user can land again
+        if (landingFired && currentZoneRef.current === 'flight') {
+          landingFired = false
         }
       }
 
@@ -1500,6 +1529,48 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         }}>
           {fps} FPS
         </div>
+      )}
+      <AboutOverlay
+        currentZone={currentZone as NavZone}
+        isTransitioning={isTransitioning}
+        navigateTo={(zone) => navigateTo(zone as Zone)}
+      />
+      <SkillsOverlay
+        currentZone={currentZone as NavZone}
+        isTransitioning={isTransitioning}
+        navigateTo={(zone) => navigateTo(zone as Zone)}
+      />
+      <ProjectsOverlay
+        currentZone={currentZone as NavZone}
+        isTransitioning={isTransitioning}
+        navigateTo={(zone) => navigateTo(zone as Zone)}
+      />
+      <ContactOverlay
+        currentZone={currentZone as NavZone}
+        isTransitioning={isTransitioning}
+        navigateTo={(zone) => navigateTo(zone as Zone)}
+      />
+      {currentZone !== 'flight' && (
+        <button
+          onClick={() => navigateTo('flight')}
+          style={{
+            position:      'fixed',
+            top:           '1.25rem',
+            right:         '1.25rem',
+            zIndex:        1000,
+            background:    'rgba(0,0,0,0.5)',
+            border:        '1px solid rgba(255,255,255,0.2)',
+            borderRadius:  '999px',
+            color:         '#D7E2EA',
+            padding:       '0.5rem 1.2rem',
+            fontSize:      '0.8rem',
+            letterSpacing: '0.15em',
+            cursor:        'pointer',
+            fontFamily:    'Kanit, sans-serif',
+          }}
+        >
+          ← BACK TO SPACE
+        </button>
       )}
     </div>
   )
