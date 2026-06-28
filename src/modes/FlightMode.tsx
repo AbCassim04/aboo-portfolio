@@ -656,14 +656,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     camera.lookAt(0, 0, 0)
 
     // ── Lights (for UFO shading) ───────────────────────────────────────────
-    const ambientLight = new THREE.AmbientLight(0x111122, 0.15)
+    const ambientLight = new THREE.AmbientLight(0x111122, 0.05)
     scene.add(ambientLight)
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.0)
     sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
-    const rimLight = new THREE.PointLight(0x7721b1, 0.8, 50)
+    const rimLight = new THREE.PointLight(0x7721b1, 0.3, 50)
     rimLight.position.set(-15, -5, -10)
     scene.add(rimLight)
 
@@ -876,7 +876,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       destAllMats.push(auraMat)
 
       // Colored point light for scene ambiance
-      const pLight = new THREE.PointLight(cfg.color, 0.5, 10)
+      const pLight = new THREE.PointLight(cfg.color, 0.2, 10)
       pLight.position.set(...cfg.pos)
       scene.add(pLight)
 
@@ -1000,9 +1000,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
-        const astroLight = new THREE.AmbientLight(0xffffff, 3)
-        scene.add(astroLight)
-        const astronautLight = new THREE.PointLight(0xffffff, 2, 50)
+        const astronautLight = new THREE.PointLight(0xffffff, 0.3, 50)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
       })
