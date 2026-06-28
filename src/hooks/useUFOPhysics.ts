@@ -15,7 +15,7 @@ const AV_CAP       = 0.04   // max rad/frame per axis
 const DRAG         = 0.98
 const ACCEL        = 0.006
 const MAX_SPEED    = 0.4
-const MAX_SPEED_BOOST = 2.0
+const MAX_SPEED_BOOST = MAX_SPEED * 8.0
 
 const _forward = new THREE.Vector3()
 const _pull    = new THREE.Vector3()

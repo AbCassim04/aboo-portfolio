@@ -182,6 +182,38 @@ export default function FlightHUD({
         )}
       </AnimatePresence>
 
+      {/* Boost indicator — top center, desktop only */}
+      <AnimatePresence>
+        {!isMobile && isBoosting && (
+          <motion.div
+            key="boost-indicator"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: [1, 0.6, 1], y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, opacity: { repeat: Infinity, duration: 0.9, ease: 'easeInOut' } }}
+            style={{
+              position:      'absolute',
+              top:           '4rem',
+              left:          '50%',
+              transform:     'translateX(-50%)',
+              background:    'rgba(139,92,246,0.2)',
+              border:        '1px solid rgba(139,92,246,0.8)',
+              borderRadius:  '8px',
+              padding:       '0.4rem 1.2rem',
+              color:         '#c4b5fd',
+              fontSize:      '0.75rem',
+              letterSpacing: '0.3em',
+              textTransform: 'uppercase',
+              fontFamily:    'Kanit, sans-serif',
+              boxShadow:     '0 0 20px rgba(139,92,246,0.5)',
+              whiteSpace:    'nowrap',
+            }}
+          >
+            ⚡ SUPER SPEED ACTIVE
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Speed bar — bottom center, desktop only */}
       {!isMobile && (
         <div style={{
