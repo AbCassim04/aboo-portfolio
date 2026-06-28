@@ -642,7 +642,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── Scene / Camera / Renderer ──────────────────────────────────────────
     const scene    = new THREE.Scene()
-    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 4000)
+    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 5000)
     const renderer = new THREE.WebGLRenderer({ antialias: !isMobile })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
@@ -659,7 +659,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const ambientLight = new THREE.AmbientLight(0x111122, 0.08)
     scene.add(ambientLight)
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.5)
-    sunLight.position.set(-1200, 0, 0)
+    sunLight.position.set(-2000, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
@@ -1037,14 +1037,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── 13. Sun ───────────────────────────────────────────────────────────
     const sunTexture = sharedLoader.load(base + 'stars/8k_sun.jpg')
-    const sunGeo     = new THREE.SphereGeometry(80, 64, 64)
+    const sunGeo     = new THREE.SphereGeometry(140, 64, 64)
     const sunMat     = new THREE.MeshBasicMaterial({ map: sunTexture })
     const sunMesh    = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(-1200, 0, 0)
+    sunMesh.position.set(-2000, 0, 0)
     scene.add(sunMesh)
 
     const SUN_SEGS = isMobile ? 16 : 32
-    const coronaGeo = new THREE.SphereGeometry(92, SUN_SEGS, SUN_SEGS)
+    const coronaGeo = new THREE.SphereGeometry(161, SUN_SEGS, SUN_SEGS)
     const coronaMat = new THREE.MeshBasicMaterial({
       color:       0xff9900,
       transparent: true,
@@ -1053,10 +1053,10 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    coronaGeo.translate(-1200, 0, 0)
+    coronaGeo.translate(-2000, 0, 0)
     scene.add(new THREE.Mesh(coronaGeo, coronaMat))
 
-    const sunGlowGeo = new THREE.SphereGeometry(100, SUN_SEGS, SUN_SEGS)
+    const sunGlowGeo = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
     const sunGlowMat = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
@@ -1065,7 +1065,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunGlowGeo.translate(-1200, 0, 0)
+    sunGlowGeo.translate(-2000, 0, 0)
     scene.add(new THREE.Mesh(sunGlowGeo, sunGlowMat))
 
     // Faint path line along X axis connecting all planets
