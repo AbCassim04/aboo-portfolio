@@ -649,16 +649,16 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     renderer.setClearColor(0x0c0c0c, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.0
+    renderer.toneMappingExposure = 0.8
     container.appendChild(renderer.domElement)
 
     camera.position.set(0, 0, 18)
     camera.lookAt(0, 0, 0)
 
     // ── Lights (for UFO shading) ───────────────────────────────────────────
-    const ambientLight = new THREE.AmbientLight(0x111122, 0.5)
+    const ambientLight = new THREE.AmbientLight(0x111122, 0.15)
     scene.add(ambientLight)
-    const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.5)
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.0)
     sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
