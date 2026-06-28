@@ -25,6 +25,7 @@ export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
+  const [boostActive, setBoostActive] = useState(false)
   const radarRef  = useRef<HTMLCanvasElement>(null)
 
   // Draw radar whenever position or planets change
@@ -342,11 +343,21 @@ export default function FlightHUD({
             pointerEvents: 'auto',
           }}>
             <button
-              onTouchStart={() => { inputRef.current.boost = true }}
-              onTouchEnd={() => { inputRef.current.boost = false }}
-              onTouchCancel={() => { inputRef.current.boost = false }}
-              style={{ ...arrowBtnStyle, background: 'rgba(139,92,246,0.3)', border: '1px solid rgba(139,92,246,0.6)', fontSize: '0.6rem', letterSpacing: '0.1em', width: '64px' }}
-            >BOOST</button>
+              onTouchStart={() => {
+                const newBoost = !boostActive
+                setBoostActive(newBoost)
+                inputRef.current.boost = newBoost
+              }}
+              style={{
+                ...arrowBtnStyle,
+                background: boostActive ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.3)',
+                border: `1px solid rgba(139,92,246,${boostActive ? '1' : '0.6'})`,
+                fontSize: '0.6rem',
+                letterSpacing: '0.1em',
+                width: '64px',
+                boxShadow: boostActive ? '0 0 15px rgba(139,92,246,0.8)' : 'none',
+              }}
+            >{boostActive ? 'BOOSTING' : 'BOOST'}</button>
             <button
               onTouchStart={() => { inputRef.current.land = true }}
               onTouchEnd={() => { inputRef.current.land = false }}

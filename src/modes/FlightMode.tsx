@@ -1330,7 +1330,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       hudFrame++
       if (hudFrame % 6 === 0) {
         const vel      = state.velocity.length()
-        const topSpeed = inputRef.current.boost ? 0.8 : 0.4
+        const topSpeed = inputRef.current.boost ? 2.0 : 0.4
         setSpeed(Math.min(vel / topSpeed, 1))
         setIsBoosting(inputRef.current.boost)
         setUfoXY({ x: ufoPos.x, y: ufoPos.y })
