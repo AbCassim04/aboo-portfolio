@@ -21,7 +21,7 @@ export default function App() {
         />
       )}
       {mode === 'blackhole' && (
-        <BlackHoleMode onExit={() => setMode('hub')} />
+        <BlackHoleMode onExit={() => setMode('flight')} />
       )}
     </div>
   )
