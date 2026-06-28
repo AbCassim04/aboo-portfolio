@@ -109,6 +109,7 @@ export default function FlightHUD({
 
     const DEAD_ZONE  = 8
     const MAX_RADIUS = 50
+    const AXIS_SNAP  = 2.2  // one axis must be this many times larger to suppress the other
 
     function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
 
@@ -137,11 +138,14 @@ export default function FlightHUD({
           const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
           const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
           setLeftKnob({ x: cx, y: cy })
+          const ax = Math.abs(dx), ay = Math.abs(dy)
+          const snapH = ax > ay * AXIS_SNAP  // suppress vertical
+          const snapV = ay > ax * AXIS_SNAP  // suppress horizontal
           const nx = clamp(dx / MAX_RADIUS, -1, 1)
           const ny = clamp(dy / MAX_RADIUS, -1, 1)
-          inputRef.current.yaw    = Math.abs(dx) > DEAD_ZONE ? nx : 0
-          inputRef.current.thrust = Math.abs(dy) > DEAD_ZONE ? (dy < 0 ? -ny : 0) : 0
-          inputRef.current.brake  = Math.abs(dy) > DEAD_ZONE ? (dy > 0 ? ny  : 0) : 0
+          inputRef.current.yaw    = (!snapV && ax > DEAD_ZONE) ? nx : 0
+          inputRef.current.thrust = (!snapH && ay > DEAD_ZONE && dy < 0) ? -ny : 0
+          inputRef.current.brake  = (!snapH && ay > DEAD_ZONE && dy > 0) ? ny  : 0
         }
         if (t.identifier === rightTouchId.current) {
           const dx   = t.clientX - rightBaseRef.current.x
@@ -150,10 +154,13 @@ export default function FlightHUD({
           const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
           const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
           setRightKnob({ x: cx, y: cy })
+          const ax = Math.abs(dx), ay = Math.abs(dy)
+          const snapH = ax > ay * AXIS_SNAP
+          const snapV = ay > ax * AXIS_SNAP
           const ny = clamp(dy / MAX_RADIUS, -1, 1)
           const nx = clamp(dx / MAX_RADIUS, -1, 1)
-          inputRef.current.vertical = Math.abs(dy) > DEAD_ZONE ? -ny : 0
-          inputRef.current.pitch    = Math.abs(dx) > DEAD_ZONE ? nx : 0
+          inputRef.current.vertical = (!snapH && ay > DEAD_ZONE) ? -ny : 0
+          inputRef.current.pitch    = (!snapV && ax > DEAD_ZONE) ? nx  : 0
         }
       }
     }
