@@ -443,7 +443,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     renderer.setSize(w, h)
     renderer.setClearColor(0x000000, 0)
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 0.8
+    renderer.toneMappingExposure = 1.0
     container.appendChild(renderer.domElement)
 
     // ── 1. SKYBOX — 3-layer NASA JPL star maps ───────────────────────────────
@@ -839,7 +839,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     })
     scene.add(new THREE.Line(pathGeo, pathMat))
 
-    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.0)
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.5)
     sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
