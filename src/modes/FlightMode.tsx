@@ -958,12 +958,12 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     }
 
     // Boost trail — bright cyan, additive, fades in/out with boost toggle
-    const BOOST_TRAIL_COUNT = 60
+    const BOOST_TRAIL_COUNT = isMobile ? 30 : 60
     let boostTrailGeo: THREE.BufferGeometry | null = null
     let boostTrailMat: THREE.PointsMaterial | null = null
     let boostTrailPos: Float32Array         | null = null
 
-    if (!isMobile) {
+    {
       const p0 = ufoStateRef.current.position
       boostTrailPos = new Float32Array(BOOST_TRAIL_COUNT * 3)
       for (let i = 0; i < BOOST_TRAIL_COUNT * 3; i += 3) {
@@ -973,7 +973,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       boostTrailGeo.setAttribute('position', new THREE.BufferAttribute(boostTrailPos, 3))
       boostTrailMat = new THREE.PointsMaterial({
         color:           0x7df9ff,
-        size:            0.2,
+        size:            isMobile ? 0.14 : 0.2,
         sizeAttenuation: true,
         transparent:     true,
         opacity:         0,
