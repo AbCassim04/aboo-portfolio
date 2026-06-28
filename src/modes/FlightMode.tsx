@@ -658,8 +658,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     // ── Lights (for UFO shading) ───────────────────────────────────────────
     const ambientLight = new THREE.AmbientLight(0x111122, 0.08)
     scene.add(ambientLight)
-    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.5)
-    sunLight.position.set(-2000, 0, 0)
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.5)
+    sunLight.position.set(-1500, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
@@ -1040,7 +1040,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const sunGeo     = new THREE.SphereGeometry(140, 64, 64)
     const sunMat     = new THREE.MeshBasicMaterial({ map: sunTexture })
     const sunMesh    = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(-2000, 0, 0)
+    sunMesh.position.set(-1500, 0, 0)
     scene.add(sunMesh)
 
     const SUN_SEGS = isMobile ? 16 : 32
@@ -1053,7 +1053,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    coronaGeo.translate(-2000, 0, 0)
+    coronaGeo.translate(-1500, 0, 0)
     scene.add(new THREE.Mesh(coronaGeo, coronaMat))
 
     const sunGlowGeo = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
@@ -1065,7 +1065,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunGlowGeo.translate(-2000, 0, 0)
+    sunGlowGeo.translate(-1500, 0, 0)
     scene.add(new THREE.Mesh(sunGlowGeo, sunGlowMat))
 
     const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
@@ -1077,7 +1077,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunBloom1Geo.translate(-2000, 0, 0)
+    sunBloom1Geo.translate(-1500, 0, 0)
     scene.add(new THREE.Mesh(sunBloom1Geo, sunBloom1Mat))
 
     const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
@@ -1089,7 +1089,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunBloom2Geo.translate(-2000, 0, 0)
+    sunBloom2Geo.translate(-1500, 0, 0)
     scene.add(new THREE.Mesh(sunBloom2Geo, sunBloom2Mat))
 
     // Faint path line along X axis connecting all planets

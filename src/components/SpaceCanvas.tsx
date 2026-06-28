@@ -796,7 +796,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const sunGeo      = new THREE.SphereGeometry(140, 64, 64)
     const sunMat      = new THREE.MeshBasicMaterial({ map: sunTex })
     const sunMesh     = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(-2000, 0, 0)
+    sunMesh.position.set(-1500, 0, 0)
     scene.add(sunMesh)
 
     const SUN_SEGS = isMobile ? 16 : 32
@@ -810,7 +810,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       side:        THREE.BackSide,
     })
     const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
-    coronaMesh.position.set(-2000, 0, 0)
+    coronaMesh.position.set(-1500, 0, 0)
     scene.add(coronaMesh)
 
     const sunGlowGeo  = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
@@ -823,7 +823,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       side:        THREE.BackSide,
     })
     const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
-    sunGlowMesh.position.set(-2000, 0, 0)
+    sunGlowMesh.position.set(-1500, 0, 0)
     scene.add(sunGlowMesh)
 
     const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
@@ -836,7 +836,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       side:        THREE.BackSide,
     })
     const sunBloom1Mesh = new THREE.Mesh(sunBloom1Geo, sunBloom1Mat)
-    sunBloom1Mesh.position.set(-2000, 0, 0)
+    sunBloom1Mesh.position.set(-1500, 0, 0)
     scene.add(sunBloom1Mesh)
 
     const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
@@ -849,7 +849,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       side:        THREE.BackSide,
     })
     const sunBloom2Mesh = new THREE.Mesh(sunBloom2Geo, sunBloom2Mat)
-    sunBloom2Mesh.position.set(-2000, 0, 0)
+    sunBloom2Mesh.position.set(-1500, 0, 0)
     scene.add(sunBloom2Mesh)
 
     // Faint path line along X axis connecting all planets
@@ -865,8 +865,8 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     })
     scene.add(new THREE.Line(pathGeo, pathMat))
 
-    const sunLight = new THREE.DirectionalLight(0xfff5e0, 2.5)
-    sunLight.position.set(-2000, 0, 0)
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.5)
+    sunLight.position.set(-1500, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
