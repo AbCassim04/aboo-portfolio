@@ -261,7 +261,7 @@ function createEarth(loader: THREE.TextureLoader, isMobile: boolean): {
     emissive:          new THREE.Color(0xffffff),
     emissiveIntensity: 0.6,
     shininess:         10,
-    side:              THREE.DoubleSide,
+    side:              THREE.FrontSide,
     depthWrite:        true,
   })
   const earthMesh = new THREE.Mesh(earthGeo, earthMat)
@@ -325,7 +325,7 @@ function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THR
   const moonMat = new THREE.MeshPhongMaterial({
     map:       moonTex,
     shininess: 5,
-    side:      THREE.DoubleSide,
+    side:      THREE.FrontSide,
   })
   const mesh = new THREE.Mesh(moonGeo, moonMat)
   return {
@@ -341,7 +341,7 @@ function createMercury(loader: THREE.TextureLoader, isMobile: boolean): { group:
   const group      = new THREE.Group()
   const INNER_SEGS = isMobile ? 32 : 64
   const mercuryGeo = new THREE.SphereGeometry(4, INNER_SEGS, INNER_SEGS)
-  const mercuryMat = new THREE.MeshPhongMaterial({ map: mercuryTex, shininess: 5, side: THREE.DoubleSide })
+  const mercuryMat = new THREE.MeshPhongMaterial({ map: mercuryTex, shininess: 5, side: THREE.FrontSide })
   const mesh       = new THREE.Mesh(mercuryGeo, mercuryMat)
   group.add(mesh)
   group.rotation.z = 0.034
@@ -357,7 +357,7 @@ function createVenus(loader: THREE.TextureLoader, isMobile: boolean): { group: T
   const group    = new THREE.Group()
   const INNER_SEGS = isMobile ? 32 : 64
   const venusGeo = new THREE.SphereGeometry(9, INNER_SEGS, INNER_SEGS)
-  const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.DoubleSide })
+  const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.FrontSide })
   const mesh     = new THREE.Mesh(venusGeo, venusMat)
   group.add(mesh)
   const atmoGeo  = new THREE.SphereGeometry(9.8, INNER_SEGS, INNER_SEGS)
@@ -375,7 +375,7 @@ function createMars(loader: THREE.TextureLoader, isMobile: boolean): { group: TH
   const group   = new THREE.Group()
   const INNER_SEGS = isMobile ? 32 : 64
   const marsGeo = new THREE.SphereGeometry(7, INNER_SEGS, INNER_SEGS)
-  const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.DoubleSide })
+  const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.FrontSide })
   const mesh    = new THREE.Mesh(marsGeo, marsMat)
   group.add(mesh)
   group.rotation.z = 0.4396
@@ -389,7 +389,7 @@ function createJupiter(loader: THREE.TextureLoader, isMobile: boolean): { group:
   const group      = new THREE.Group()
   const OUTER_SEGS = isMobile ? 16 : 32
   const jupiterGeo = new THREE.SphereGeometry(110, OUTER_SEGS, OUTER_SEGS)
-  const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.DoubleSide })
+  const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.FrontSide })
   const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
   group.add(mesh)
   group.rotation.z = 0.0546
@@ -406,7 +406,7 @@ function createSaturn(loader: THREE.TextureLoader, isMobile: boolean): { group: 
   const OUTER_SEGS = isMobile ? 16 : 32
   const RING_SEGS  = isMobile ? 64 : 128
   const saturnGeo = new THREE.SphereGeometry(90, OUTER_SEGS, OUTER_SEGS)
-  const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.DoubleSide })
+  const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.FrontSide })
   const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
   group.add(mesh)
   const ringInner = 117, ringOuter = 216
@@ -432,7 +432,7 @@ function createUranus(loader: THREE.TextureLoader, isMobile: boolean): { group: 
   const group     = new THREE.Group()
   const OUTER_SEGS = isMobile ? 16 : 32
   const uranusGeo = new THREE.SphereGeometry(40, OUTER_SEGS, OUTER_SEGS)
-  const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.DoubleSide })
+  const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.FrontSide })
   const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
   group.add(mesh)
   group.rotation.z = 1.706
@@ -446,7 +446,7 @@ function createNeptune(loader: THREE.TextureLoader, isMobile: boolean): { group:
   const group      = new THREE.Group()
   const OUTER_SEGS = isMobile ? 16 : 32
   const neptuneGeo = new THREE.SphereGeometry(38, OUTER_SEGS, OUTER_SEGS)
-  const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.DoubleSide })
+  const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.FrontSide })
   const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
   group.add(mesh)
   group.rotation.z = 0.4942
@@ -648,15 +648,17 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
     renderer.setClearColor(0x0c0c0c, 1)
     renderer.outputColorSpace = THREE.SRGBColorSpace
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.0
     container.appendChild(renderer.domElement)
 
     camera.position.set(0, 0, 18)
     camera.lookAt(0, 0, 0)
 
     // ── Lights (for UFO shading) ───────────────────────────────────────────
-    const ambientLight = new THREE.AmbientLight(0x111122, 0.3)
+    const ambientLight = new THREE.AmbientLight(0x111122, 0.5)
     scene.add(ambientLight)
-    const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.0)
+    const sunLight = new THREE.DirectionalLight(0xfff5e0, 1.5)
     sunLight.position.set(-1200, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
