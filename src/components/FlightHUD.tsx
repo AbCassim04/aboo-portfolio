@@ -25,7 +25,7 @@ export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
-  const [boostActive, setBoostActive] = useState(false)
+  const [boostNotif, setBoostNotif] = useState<string | null>(null)
   const radarRef  = useRef<HTMLCanvasElement>(null)
 
   // Draw radar whenever position or planets change
@@ -94,6 +94,20 @@ export default function FlightHUD({
     ctx.lineWidth   = 1.5
     ctx.stroke()
   }, [ufoX, ufoY, planetDots])
+
+  // Poll inputRef for boost changes to drive the notification toast
+  useEffect(() => {
+    let prev = false
+    const id = setInterval(() => {
+      const curr = inputRef.current.boost
+      if (curr !== prev) {
+        prev = curr
+        setBoostNotif(curr ? '⚡ SUPER SPEED ACTIVATED' : '⚡ SUPER SPEED DEACTIVATED')
+        setTimeout(() => setBoostNotif(null), 1500)
+      }
+    }, 50)
+    return () => clearInterval(id)
+  }, [inputRef])
 
   const speedPct = Math.round(speed * 100)
 
@@ -182,15 +196,15 @@ export default function FlightHUD({
         )}
       </AnimatePresence>
 
-      {/* Boost indicator — top center, desktop only */}
+      {/* Boost notification toast — fades out after 1.5s */}
       <AnimatePresence>
-        {!isMobile && isBoosting && (
+        {boostNotif && (
           <motion.div
-            key="boost-indicator"
+            key={boostNotif}
             initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: [1, 0.6, 1], y: 0 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.25, opacity: { repeat: Infinity, duration: 0.9, ease: 'easeInOut' } }}
+            transition={{ duration: 0.25 }}
             style={{
               position:      'absolute',
               top:           '4rem',
@@ -203,13 +217,13 @@ export default function FlightHUD({
               color:         '#c4b5fd',
               fontSize:      '0.75rem',
               letterSpacing: '0.3em',
-              textTransform: 'uppercase',
               fontFamily:    'Kanit, sans-serif',
               boxShadow:     '0 0 20px rgba(139,92,246,0.5)',
+              pointerEvents: 'none',
               whiteSpace:    'nowrap',
             }}
           >
-            ⚡ SUPER SPEED ACTIVE
+            {boostNotif}
           </motion.div>
         )}
       </AnimatePresence>
@@ -376,20 +390,21 @@ export default function FlightHUD({
           }}>
             <button
               onTouchStart={() => {
-                const newBoost = !boostActive
-                setBoostActive(newBoost)
+                const newBoost = !inputRef.current.boost
                 inputRef.current.boost = newBoost
+                setBoostNotif(newBoost ? '⚡ SUPER SPEED ACTIVATED' : '⚡ SUPER SPEED DEACTIVATED')
+                setTimeout(() => setBoostNotif(null), 1500)
               }}
               style={{
                 ...arrowBtnStyle,
-                background: boostActive ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.3)',
-                border: `1px solid rgba(139,92,246,${boostActive ? '1' : '0.6'})`,
+                background: isBoosting ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.3)',
+                border: `1px solid rgba(139,92,246,${isBoosting ? '1' : '0.6'})`,
                 fontSize: '0.6rem',
                 letterSpacing: '0.1em',
                 width: '64px',
-                boxShadow: boostActive ? '0 0 15px rgba(139,92,246,0.8)' : 'none',
+                boxShadow: isBoosting ? '0 0 15px rgba(139,92,246,0.8)' : 'none',
               }}
-            >{boostActive ? 'BOOSTING' : 'BOOST'}</button>
+            >{isBoosting ? 'BOOSTING' : 'BOOST'}</button>
             <button
               onTouchStart={() => { inputRef.current.land = true }}
               onTouchEnd={() => { inputRef.current.land = false }}

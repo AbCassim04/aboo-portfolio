@@ -24,10 +24,16 @@ export function useFlightControls(): React.MutableRefObject<FlightInput> {
 
     const keys = new Set<string>()
 
+    let boostOn = false
+
     const onKeyDown = (e: KeyboardEvent) => {
       keys.add(e.code)
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
         e.preventDefault()
+      }
+      if (e.code === 'Space' && !e.repeat) {
+        boostOn = !boostOn
+        inputRef.current.boost = boostOn
       }
     }
     const onKeyUp = (e: KeyboardEvent) => keys.delete(e.code)
@@ -45,7 +51,6 @@ export function useFlightControls(): React.MutableRefObject<FlightInput> {
       inp.roll     = keys.has('KeyZ') ? -1 : keys.has('KeyX') ? 1 : 0
       inp.vertical = (keys.has('ShiftLeft') || keys.has('ShiftRight'))     ?  1
                    : (keys.has('ControlLeft') || keys.has('ControlRight')) ? -1 : 0
-      inp.boost  = keys.has('Space')
       inp.land   = keys.has('KeyF')
 
       rafId = requestAnimationFrame(loop)
