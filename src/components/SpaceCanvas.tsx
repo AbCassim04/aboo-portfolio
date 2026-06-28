@@ -804,7 +804,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const coronaMat  = new THREE.MeshBasicMaterial({
       color:       0xff9900,
       transparent: true,
-      opacity:     0.08,
+      opacity:     0.55,
       blending:    THREE.AdditiveBlending,
       depthWrite:  false,
       side:        THREE.BackSide,
@@ -817,7 +817,7 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const sunGlowMat  = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
-      opacity:     0.15,
+      opacity:     0.7,
       blending:    THREE.AdditiveBlending,
       depthWrite:  false,
       side:        THREE.BackSide,
@@ -825,6 +825,32 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
     sunGlowMesh.position.set(-2000, 0, 0)
     scene.add(sunGlowMesh)
+
+    const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
+    const sunBloom1Mat = new THREE.MeshBasicMaterial({
+      color:       0xff8800,
+      transparent: true,
+      opacity:     0.35,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    const sunBloom1Mesh = new THREE.Mesh(sunBloom1Geo, sunBloom1Mat)
+    sunBloom1Mesh.position.set(-2000, 0, 0)
+    scene.add(sunBloom1Mesh)
+
+    const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
+    const sunBloom2Mat = new THREE.MeshBasicMaterial({
+      color:       0xffffff,
+      transparent: true,
+      opacity:     0.12,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    const sunBloom2Mesh = new THREE.Mesh(sunBloom2Geo, sunBloom2Mat)
+    sunBloom2Mesh.position.set(-2000, 0, 0)
+    scene.add(sunBloom2Mesh)
 
     // Faint path line along X axis connecting all planets
     const pathGeo = new THREE.BufferGeometry().setFromPoints([

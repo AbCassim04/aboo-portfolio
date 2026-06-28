@@ -1048,7 +1048,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const coronaMat = new THREE.MeshBasicMaterial({
       color:       0xff9900,
       transparent: true,
-      opacity:     0.08,
+      opacity:     0.55,
       blending:    THREE.AdditiveBlending,
       depthWrite:  false,
       side:        THREE.BackSide,
@@ -1060,13 +1060,37 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const sunGlowMat = new THREE.MeshBasicMaterial({
       color:       0xffffaa,
       transparent: true,
-      opacity:     0.15,
+      opacity:     0.7,
       blending:    THREE.AdditiveBlending,
       depthWrite:  false,
       side:        THREE.BackSide,
     })
     sunGlowGeo.translate(-2000, 0, 0)
     scene.add(new THREE.Mesh(sunGlowGeo, sunGlowMat))
+
+    const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
+    const sunBloom1Mat = new THREE.MeshBasicMaterial({
+      color:       0xff8800,
+      transparent: true,
+      opacity:     0.35,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    sunBloom1Geo.translate(-2000, 0, 0)
+    scene.add(new THREE.Mesh(sunBloom1Geo, sunBloom1Mat))
+
+    const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
+    const sunBloom2Mat = new THREE.MeshBasicMaterial({
+      color:       0xffffff,
+      transparent: true,
+      opacity:     0.12,
+      blending:    THREE.AdditiveBlending,
+      depthWrite:  false,
+      side:        THREE.BackSide,
+    })
+    sunBloom2Geo.translate(-2000, 0, 0)
+    scene.add(new THREE.Mesh(sunBloom2Geo, sunBloom2Mat))
 
     // Faint path line along X axis connecting all planets
     const pathGeo = new THREE.BufferGeometry().setFromPoints([
