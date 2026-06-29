@@ -169,9 +169,9 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
-const ASTRONAUT_ORBIT_RADIUS = 25
+const ASTRONAUT_ORBIT_RADIUS = 35
 const ASTRONAUT_SPEED        = 0.0006
-const ASTRONAUT_SCALE        = 0.3
+const ASTRONAUT_SCALE        = 3.0
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -559,22 +559,42 @@ function createAstronaut(): Promise<{ group: THREE.Group; dispose: () => void }>
       (gltf) => {
         console.log('✅ Astronaut loaded')
         const group = gltf.scene
-        group.scale.setScalar(ASTRONAUT_SCALE)
+
+        // The GLB root node (Sketchfab_model) has a baked-in matrix that
+        // translates the model ~(177, 283, -438) in local space with scale ~0.00143.
+        // Without normalisation the model appears thousands of units from the orbit.
+        // Fix: compute the bounding box, shift child[0] so the model is centred at
+        // the group origin, then scale the group so the model is ASTRONAUT_SCALE units.
+        group.updateMatrixWorld(true)
+        const rawBox    = new THREE.Box3().setFromObject(group)
+        const rawCenter = rawBox.getCenter(new THREE.Vector3())
+        const rawSize   = rawBox.getSize(new THREE.Vector3())
+        const maxDim    = Math.max(rawSize.x, rawSize.y, rawSize.z)
+        console.log('Astronaut raw center:', rawCenter, 'max dim:', maxDim)
+
+        // Shift the Sketchfab root child so the model is centred at (0,0,0)
+        if (group.children[0]) {
+          group.children[0].position.sub(rawCenter)
+          group.children[0].updateMatrix()
+        }
+
+        // Scale so the tallest axis equals ASTRONAUT_SCALE world units
+        group.scale.setScalar(maxDim > 0 ? ASTRONAUT_SCALE / maxDim : ASTRONAUT_SCALE)
+
         group.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh
             mesh.castShadow    = false
             mesh.receiveShadow = false
-            // KHR_materials_pbrSpecularGlossiness isn't supported natively;
-            // replace with MeshStandardMaterial so the model is visible
-            const oldMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
-            const newMat = new THREE.MeshStandardMaterial({
-              color:     (oldMat as any).color ?? new THREE.Color(0xcccccc),
-              roughness: 0.8,
+            mesh.frustumCulled = false
+            // KHR_materials_pbrSpecularGlossiness is unsupported in Three.js r184;
+            // replace every mesh's material with MeshBasicMaterial (no lighting needed)
+            mesh.material = new THREE.MeshStandardMaterial({
+              color:     new THREE.Color(0xddddcc),
+              roughness: 0.7,
               metalness: 0.1,
               side:      THREE.DoubleSide,
             })
-            mesh.material = newMat
           }
         })
         dracoLoader.dispose()
@@ -1046,7 +1066,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
-        const astronautLight = new THREE.PointLight(0xffffff, 3, 80)
+        const astronautLight = new THREE.PointLight(0xfff5e0, 5, 100)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
       })
