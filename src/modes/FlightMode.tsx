@@ -1295,7 +1295,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       saturnObj.mesh.rotation.y  += 0.0009
       uranusObj.mesh.rotation.y  += 0.0003
       neptuneObj.mesh.rotation.y += 0.00035
-      asteroidBelt.update()
+      asteroidBelt.update(camera.position)
 
       // Shooting stars (desktop)
       if (!isMobile) {

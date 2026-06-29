@@ -36,24 +36,33 @@ function seededRandom(seed: number) {
 }
 
 export class AsteroidField {
-  private mesh:    THREE.InstancedMesh
-  private config:  AsteroidFieldConfig
-  private dummy:   THREE.Object3D
-  private orbits:  AsteroidOrbit[]
-  private time:    number = 2
-  private isMobile: boolean
+  private meshHigh:  THREE.InstancedMesh
+  private meshMed:   THREE.InstancedMesh
+  private meshLow:   THREE.InstancedMesh
+  private count:     number
+  private config:    AsteroidFieldConfig
+  private dummy:     THREE.Object3D
+  private orbits:    AsteroidOrbit[]
+  private scales:    number[]
+  private quats:     THREE.Quaternion[]
+  private time:      number = 2
+  private isMobile:  boolean
+  private scene:     THREE.Scene | null = null
+
+  // Pre-allocated temporaries to avoid per-frame allocation
+  private readonly _zero = new THREE.Matrix4().scale(new THREE.Vector3(0, 0, 0))
 
   constructor(config: AsteroidFieldConfig, isMobile: boolean) {
     this.config   = config
     this.isMobile = isMobile
     this.dummy    = new THREE.Object3D()
 
-    const count = isMobile ? config.countMobile : config.count
-    const rand  = seededRandom(config.seed)
+    this.count = isMobile ? config.countMobile : config.count
+    const rand = seededRandom(config.seed)
 
-    // Procedural rock geometry — icosahedron with vertex displacement
-    const baseGeo = new THREE.IcosahedronGeometry(1, 1)
-    const pos     = baseGeo.attributes.position as THREE.BufferAttribute
+    // High detail — vertex-displaced, 80 triangles
+    const geoHigh = new THREE.IcosahedronGeometry(1, 2)
+    const pos     = geoHigh.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < pos.count; i++) {
       pos.setXYZ(
         i,
@@ -63,18 +72,34 @@ export class AsteroidField {
       )
     }
     pos.needsUpdate = true
-    baseGeo.computeVertexNormals()
+    geoHigh.computeVertexNormals()
 
-    const mat = new THREE.MeshBasicMaterial({
-      color: config.color,
-    })
+    const geoMed = new THREE.IcosahedronGeometry(1, 1)  // 20 triangles
+    const geoLow = new THREE.IcosahedronGeometry(1, 0)  // 8 triangles
 
-    this.mesh = new THREE.InstancedMesh(baseGeo, mat, count)
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    const mat = new THREE.MeshBasicMaterial({ color: config.color })
 
-    // Generate Keplerian orbital elements per asteroid
+    this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, this.count)
+    this.meshMed  = new THREE.InstancedMesh(geoMed,  mat, this.count)
+    this.meshLow  = new THREE.InstancedMesh(geoLow,  mat, this.count)
+
+    this.meshHigh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    this.meshMed.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    this.meshLow.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+
+    // Start all instances hidden; first update() places them
+    for (let i = 0; i < this.count; i++) {
+      this.meshHigh.setMatrixAt(i, this._zero)
+      this.meshMed.setMatrixAt(i, this._zero)
+      this.meshLow.setMatrixAt(i, this._zero)
+    }
+
+    // Generate Keplerian orbital elements + per-asteroid rotation/scale
     this.orbits = []
-    for (let i = 0; i < count; i++) {
+    this.scales = []
+    this.quats  = []
+
+    for (let i = 0; i < this.count; i++) {
       const a = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
 
       this.orbits.push({
@@ -87,29 +112,27 @@ export class AsteroidField {
         speed:         0.00003 + rand() * 0.00005,
       })
 
-      // Initial rotation (static — does not change as asteroid orbits)
+      // Static rotation stored as quaternion — can't recover from zero matrix
       this.dummy.rotation.set(
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
       )
+      this.dummy.updateWorldMatrix(false, false)
+      this.quats.push(this.dummy.quaternion.clone())
 
-      // Power distribution — most asteroids are small, few are large
-      const t     = rand()
+      // Power distribution — most asteroids small, few large
+      const t = rand()
       const scale = config.minScale + Math.pow(t, 3) * (config.maxScale - config.minScale)
-      this.dummy.scale.setScalar(scale)
-
-      // Position starts at origin; first update() will place it correctly
-      this.dummy.position.set(0, 0, 0)
-      this.dummy.updateMatrix()
-      this.mesh.setMatrixAt(i, this.dummy.matrix)
+      this.scales.push(scale)
     }
 
-    this.mesh.instanceMatrix.needsUpdate = true
+    this.meshHigh.instanceMatrix.needsUpdate = true
+    this.meshMed.instanceMatrix.needsUpdate  = true
+    this.meshLow.instanceMatrix.needsUpdate  = true
   }
 
   private orbitalToCartesian(orbit: AsteroidOrbit): THREE.Vector3 {
-    // Solve Kepler's equation M = E - e*sin(E) iteratively
     let E = orbit.meanAnomaly
     for (let i = 0; i < 5; i++) {
       E = E - (E - orbit.eccentricity * Math.sin(E) - orbit.meanAnomaly) /
@@ -119,12 +142,8 @@ export class AsteroidField {
     const cosE = Math.cos(E)
     const sinE = Math.sin(E)
     const e    = orbit.eccentricity
-    const nu   = Math.atan2(
-      Math.sqrt(1 - e * e) * sinE,
-      cosE - e,
-    )
-
-    const r = orbit.semiMajorAxis * (1 - e * cosE)
+    const nu   = Math.atan2(Math.sqrt(1 - e * e) * sinE, cosE - e)
+    const r    = orbit.semiMajorAxis * (1 - e * cosE)
 
     const cosNu = Math.cos(nu + orbit.argPeriapsis)
     const sinNu = Math.sin(nu + orbit.argPeriapsis)
@@ -141,17 +160,17 @@ export class AsteroidField {
   }
 
   addToScene(scene: THREE.Scene): void {
-    scene.add(this.mesh)
+    this.scene = scene
+    scene.add(this.meshHigh)
+    scene.add(this.meshMed)
+    scene.add(this.meshLow)
   }
 
-  update(): void {
+  update(cameraPosition?: THREE.Vector3): void {
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
 
-    const mat         = new THREE.Matrix4()
-    const scale       = new THREE.Vector3()
-    const quat        = new THREE.Quaternion()
-    const translation = new THREE.Vector3()
+    const camPos = cameraPosition ?? new THREE.Vector3()
 
     for (let i = 0; i < this.orbits.length; i++) {
       const orbit = this.orbits[i]
@@ -159,33 +178,49 @@ export class AsteroidField {
       orbit.meanAnomaly += orbit.speed
       if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2
 
-      const worldPos = this.orbitalToCartesian(orbit)
-
-      // Read current matrix to recover rotation and scale set in constructor
-      this.mesh.getMatrixAt(i, mat)
-      mat.decompose(translation, quat, scale)
+      const orbitPos = this.orbitalToCartesian(orbit)
 
       this.dummy.position.set(
-        this.config.centerX + worldPos.x,
-        this.config.centerY + worldPos.y,
-        this.config.centerZ + worldPos.z,
+        this.config.centerX + orbitPos.x,
+        this.config.centerY + orbitPos.y,
+        this.config.centerZ + orbitPos.z,
       )
-      this.dummy.quaternion.copy(quat)
-      this.dummy.scale.copy(scale)
+      this.dummy.quaternion.copy(this.quats[i])
+      this.dummy.scale.setScalar(this.scales[i])
       this.dummy.updateMatrix()
-      this.mesh.setMatrixAt(i, this.dummy.matrix)
+
+      const dist = this.dummy.position.distanceTo(camPos)
+
+      if (dist < 400) {
+        this.meshHigh.setMatrixAt(i, this.dummy.matrix)
+        this.meshMed.setMatrixAt(i, this._zero)
+        this.meshLow.setMatrixAt(i, this._zero)
+      } else if (dist < 1200) {
+        this.meshHigh.setMatrixAt(i, this._zero)
+        this.meshMed.setMatrixAt(i, this.dummy.matrix)
+        this.meshLow.setMatrixAt(i, this._zero)
+      } else {
+        this.meshHigh.setMatrixAt(i, this._zero)
+        this.meshMed.setMatrixAt(i, this._zero)
+        this.meshLow.setMatrixAt(i, this.dummy.matrix)
+      }
     }
 
-    this.mesh.instanceMatrix.needsUpdate = true
+    this.meshHigh.instanceMatrix.needsUpdate = true
+    this.meshMed.instanceMatrix.needsUpdate  = true
+    this.meshLow.instanceMatrix.needsUpdate  = true
   }
 
   dispose(): void {
-    this.mesh.geometry.dispose()
-    ;(this.mesh.material as THREE.Material).dispose()
-  }
-
-  getMesh(): THREE.InstancedMesh {
-    return this.mesh
+    if (this.scene) {
+      this.scene.remove(this.meshHigh)
+      this.scene.remove(this.meshMed)
+      this.scene.remove(this.meshLow)
+    }
+    this.meshHigh.geometry.dispose()
+    this.meshMed.geometry.dispose()
+    this.meshLow.geometry.dispose()
+    ;(this.meshHigh.material as THREE.Material).dispose()
   }
 }
 
