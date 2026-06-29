@@ -151,9 +151,8 @@ export default function FlightHUD({
       })
     })
     rightManager.on('move', (evt) => {
-      const { x, y } = evt.data.vector
+      const { y } = evt.data.vector
       inputRef.current.vertical = -y
-      inputRef.current.pitch    =  x
     })
     rightManager.on('end', () => {
       document.querySelectorAll('#right-joystick-zone .nipple').forEach(el => {
@@ -161,7 +160,6 @@ export default function FlightHUD({
         el.classList.remove('active')
       })
       inputRef.current.vertical = 0
-      inputRef.current.pitch    = 0
     })
 
     return () => {
@@ -416,28 +414,6 @@ export default function FlightHUD({
               opacity: 1.0 !important;
             }
           `}</style>
-
-          {/* Left label */}
-          <div style={{
-            position:      'absolute',
-            bottom:        '14rem',
-            left:          '4rem',
-            color:         'rgba(196,181,253,0.4)',
-            fontSize:      '0.55rem',
-            letterSpacing: '0.15em',
-            pointerEvents: 'none',
-          }}>MOVE</div>
-
-          {/* Right label */}
-          <div style={{
-            position:      'absolute',
-            bottom:        '14rem',
-            right:         '4rem',
-            color:         'rgba(196,181,253,0.4)',
-            fontSize:      '0.55rem',
-            letterSpacing: '0.15em',
-            pointerEvents: 'none',
-          }}>LOOK</div>
 
           {/* Left joystick zone */}
           <div
