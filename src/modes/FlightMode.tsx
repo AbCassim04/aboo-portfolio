@@ -169,9 +169,9 @@ const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
 const JWST_ORBIT_SPEED   = 0.0003
 const JWST_SCALE         = 0.08
-const ASTRONAUT_ORBIT_RADIUS = 22
+const ASTRONAUT_ORBIT_RADIUS = 25
 const ASTRONAUT_SPEED        = 0.0006
-const ASTRONAUT_SCALE        = 0.5
+const ASTRONAUT_SCALE        = 0.3
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -565,16 +565,16 @@ function createAstronaut(): Promise<{ group: THREE.Group; dispose: () => void }>
             const mesh = child as THREE.Mesh
             mesh.castShadow    = false
             mesh.receiveShadow = false
-            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-            mats.forEach(m => {
-              if (m) {
-                m.side = THREE.DoubleSide
-                if ((m as THREE.MeshStandardMaterial).color) {
-                  (m as THREE.MeshStandardMaterial).color.set(0xcccccc)
-                }
-                m.needsUpdate = true
-              }
+            // KHR_materials_pbrSpecularGlossiness isn't supported natively;
+            // replace with MeshStandardMaterial so the model is visible
+            const oldMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
+            const newMat = new THREE.MeshStandardMaterial({
+              color:     (oldMat as any).color ?? new THREE.Color(0xcccccc),
+              roughness: 0.8,
+              metalness: 0.1,
+              side:      THREE.DoubleSide,
             })
+            mesh.material = newMat
           }
         })
         dracoLoader.dispose()
@@ -1046,7 +1046,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
-        const astronautLight = new THREE.PointLight(0xffffff, 0.3, 50)
+        const astronautLight = new THREE.PointLight(0xffffff, 3, 80)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
       })
