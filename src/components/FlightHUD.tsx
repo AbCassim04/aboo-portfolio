@@ -27,6 +27,8 @@ export default function FlightHUD({
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
+  const [leftActive,  setLeftActive]  = useState(false)
+  const [rightActive, setRightActive] = useState(false)
   const radarRef = useRef<HTMLCanvasElement>(null)
 
   // Draw radar whenever position or planets change
@@ -122,26 +124,28 @@ export default function FlightHUD({
       restOpacity: 0.5,
     })
 
+    leftManager.on('start', () => setLeftActive(true))
     leftManager.on('move', (evt) => {
       const { x, y } = evt.data.vector
       inputRef.current.yaw    =  x
       inputRef.current.thrust =  y > 0 ? y : 0
       inputRef.current.brake  =  y < 0 ? -y : 0
     })
-
     leftManager.on('end', () => {
+      setLeftActive(false)
       inputRef.current.yaw    = 0
       inputRef.current.thrust = 0
       inputRef.current.brake  = 0
     })
 
+    rightManager.on('start', () => setRightActive(true))
     rightManager.on('move', (evt) => {
       const { x, y } = evt.data.vector
-      inputRef.current.pitch    = -y
-      inputRef.current.vertical =  x
+      inputRef.current.pitch    =  y
+      inputRef.current.vertical = -x
     })
-
     rightManager.on('end', () => {
+      setRightActive(false)
       inputRef.current.pitch    = 0
       inputRef.current.vertical = 0
     })
@@ -375,6 +379,40 @@ export default function FlightHUD({
       {/* Dual joystick — mobile only */}
       {isMobile && (
         <>
+          <style>{`
+            .nipple .front {
+              background: rgba(155, 79, 192, 0.8) !important;
+              border: 2px solid rgba(196, 181, 253, 0.9) !important;
+              box-shadow: 0 0 12px rgba(155, 79, 192, 0.6) !important;
+            }
+            .nipple .back {
+              background: rgba(155, 79, 192, 0.15) !important;
+              border: 1px solid rgba(155, 79, 192, 0.4) !important;
+            }
+          `}</style>
+
+          {/* Left label */}
+          <div style={{
+            position:      'absolute',
+            bottom:        '14rem',
+            left:          '4rem',
+            color:         'rgba(196,181,253,0.4)',
+            fontSize:      '0.55rem',
+            letterSpacing: '0.15em',
+            pointerEvents: 'none',
+          }}>MOVE</div>
+
+          {/* Right label */}
+          <div style={{
+            position:      'absolute',
+            bottom:        '14rem',
+            right:         '4rem',
+            color:         'rgba(196,181,253,0.4)',
+            fontSize:      '0.55rem',
+            letterSpacing: '0.15em',
+            pointerEvents: 'none',
+          }}>LOOK</div>
+
           {/* Left joystick zone */}
           <div
             id="left-joystick-zone"
@@ -383,9 +421,11 @@ export default function FlightHUD({
               bottom:        '5rem',
               left:          0,
               width:         '50%',
-              height:        '200px',
+              height:        '220px',
               pointerEvents: 'auto',
               touchAction:   'none',
+              opacity:       leftActive ? 1 : 0.3,
+              transition:    'opacity 0.5s ease',
             }}
           />
 
@@ -397,9 +437,11 @@ export default function FlightHUD({
               bottom:        '5rem',
               right:         0,
               width:         '50%',
-              height:        '200px',
+              height:        '220px',
               pointerEvents: 'auto',
               touchAction:   'none',
+              opacity:       rightActive ? 1 : 0.3,
+              transition:    'opacity 0.5s ease',
             }}
           />
 
