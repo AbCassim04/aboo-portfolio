@@ -4,6 +4,7 @@ import { GLTFLoader }  from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { useFlightControls } from '../hooks/useFlightControls'
 import { useUFOPhysics }     from '../hooks/useUFOPhysics'
+import { AsteroidField, MAIN_BELT_CONFIG } from '../systems/AsteroidField'
 import FlightHUD             from '../components/FlightHUD'
 import type { PlanetDot }    from '../components/FlightHUD'
 import LoadingScreen         from '../components/LoadingScreen'
@@ -1080,6 +1081,10 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     neptuneObj.group.position.set(2300, 0, 10)
     scene.add(neptuneObj.group)
 
+    // Asteroid belt
+    const asteroidBelt = new AsteroidField(MAIN_BELT_CONFIG, isMobile)
+    asteroidBelt.addToScene(scene)
+
     // ── 13. Sun ───────────────────────────────────────────────────────────
     const sunTexture = sharedLoader.load(base + 'stars/8k_sun.jpg')
     const sunGeo     = new THREE.SphereGeometry(140, 64, 64)
@@ -1290,6 +1295,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       saturnObj.mesh.rotation.y  += 0.0009
       uranusObj.mesh.rotation.y  += 0.0003
       neptuneObj.mesh.rotation.y += 0.00035
+      asteroidBelt.update()
 
       // Shooting stars (desktop)
       if (!isMobile) {
@@ -1486,6 +1492,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       coronaGeo.dispose(); coronaMat.dispose()
       sunGlowGeo.dispose(); sunGlowMat.dispose()
       pathGeo.dispose(); pathMat.dispose()
+      asteroidBelt.dispose()
 
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
