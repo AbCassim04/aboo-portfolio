@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { CameraTransitionState, Zone } from '../hooks/useCameraNavigation'
 import LoadingScreen from './LoadingScreen'
+import { AsteroidField } from '../systems/AsteroidField'
 
 // ── GLSL shaders ───────────────────────────────────────────────────────────
 
@@ -214,125 +215,6 @@ function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THR
   }
 }
 
-function createMercury(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base       = import.meta.env.BASE_URL
-  const mercuryTex = loader.load(base + 'earth/8k_mercury.jpg')
-  mercuryTex.colorSpace = THREE.SRGBColorSpace
-  const group      = new THREE.Group()
-  const INNER_SEGS = isMobile ? 32 : 64
-  const mercuryGeo = new THREE.SphereGeometry(4, INNER_SEGS, INNER_SEGS)
-  const mercuryMat = new THREE.MeshPhongMaterial({ map: mercuryTex, shininess: 5, side: THREE.FrontSide })
-  const mesh       = new THREE.Mesh(mercuryGeo, mercuryMat)
-  group.add(mesh)
-  group.rotation.z = 0.034
-  return { group, mesh, dispose: () => { mercuryGeo.dispose(); mercuryMat.dispose(); mercuryTex.dispose() } }
-}
-
-function createVenus(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; atmoMesh: THREE.Mesh; dispose: () => void } {
-  const base     = import.meta.env.BASE_URL
-  const venusTex = loader.load(base + 'earth/8k_venus_surface.jpg')
-  const atmoTex  = loader.load(base + 'earth/4k_venus_atmosphere.jpg')
-  venusTex.colorSpace = THREE.SRGBColorSpace
-  atmoTex.colorSpace  = THREE.SRGBColorSpace
-  const group    = new THREE.Group()
-  const INNER_SEGS = isMobile ? 32 : 64
-  const venusGeo = new THREE.SphereGeometry(9, INNER_SEGS, INNER_SEGS)
-  const venusMat = new THREE.MeshPhongMaterial({ map: venusTex, shininess: 8, side: THREE.FrontSide })
-  const mesh     = new THREE.Mesh(venusGeo, venusMat)
-  group.add(mesh)
-  const atmoGeo  = new THREE.SphereGeometry(9.8, INNER_SEGS, INNER_SEGS)
-  const atmoMat  = new THREE.MeshPhongMaterial({ map: atmoTex, shininess: 3, side: THREE.DoubleSide, transparent: true, opacity: 0.7, depthWrite: false })
-  const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
-  group.add(atmoMesh)
-  group.rotation.z = 3.096
-  return { group, mesh, atmoMesh, dispose: () => { venusGeo.dispose(); venusMat.dispose(); atmoGeo.dispose(); atmoMat.dispose(); venusTex.dispose(); atmoTex.dispose() } }
-}
-
-function createMars(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base    = import.meta.env.BASE_URL
-  const marsTex = loader.load(base + 'earth/8k_mars.jpg')
-  marsTex.colorSpace = THREE.SRGBColorSpace
-  const group   = new THREE.Group()
-  const INNER_SEGS = isMobile ? 32 : 64
-  const marsGeo = new THREE.SphereGeometry(5, INNER_SEGS, INNER_SEGS)
-  const marsMat = new THREE.MeshPhongMaterial({ map: marsTex, shininess: 5, side: THREE.FrontSide })
-  const mesh    = new THREE.Mesh(marsGeo, marsMat)
-  group.add(mesh)
-  group.rotation.z = 0.4396
-  return { group, mesh, dispose: () => { marsGeo.dispose(); marsMat.dispose(); marsTex.dispose() } }
-}
-
-function createJupiter(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base       = import.meta.env.BASE_URL
-  const jupiterTex = loader.load(base + 'earth/8k_jupiter.jpg')
-  jupiterTex.colorSpace = THREE.SRGBColorSpace
-  const group      = new THREE.Group()
-  const OUTER_SEGS = isMobile ? 16 : 32
-  const jupiterGeo = new THREE.SphereGeometry(110, OUTER_SEGS, OUTER_SEGS)
-  const jupiterMat = new THREE.MeshPhongMaterial({ map: jupiterTex, shininess: 10, side: THREE.FrontSide })
-  const mesh       = new THREE.Mesh(jupiterGeo, jupiterMat)
-  group.add(mesh)
-  group.rotation.z = 0.0546
-  return { group, mesh, dispose: () => { jupiterGeo.dispose(); jupiterMat.dispose(); jupiterTex.dispose() } }
-}
-
-function createSaturn(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base      = import.meta.env.BASE_URL
-  const saturnTex = loader.load(base + 'earth/8k_saturn.jpg')
-  const ringTex   = loader.load(base + 'earth/8k_saturn_ring_alpha.png')
-  saturnTex.colorSpace = THREE.SRGBColorSpace
-  ringTex.colorSpace   = THREE.SRGBColorSpace
-  const group     = new THREE.Group()
-  const OUTER_SEGS = isMobile ? 16 : 32
-  const RING_SEGS  = isMobile ? 64 : 128
-  const saturnGeo = new THREE.SphereGeometry(90, OUTER_SEGS, OUTER_SEGS)
-  const saturnMat = new THREE.MeshPhongMaterial({ map: saturnTex, shininess: 10, side: THREE.FrontSide })
-  const mesh      = new THREE.Mesh(saturnGeo, saturnMat)
-  group.add(mesh)
-  const ringInner = 117, ringOuter = 216
-  const ringGeo   = new THREE.RingGeometry(ringInner, ringOuter, RING_SEGS)
-  const pos = ringGeo.attributes.position as THREE.BufferAttribute
-  const uv  = ringGeo.attributes.uv as THREE.BufferAttribute
-  for (let i = 0; i < pos.count; i++) {
-    const r = Math.sqrt(pos.getX(i) ** 2 + pos.getY(i) ** 2)
-    uv.setXY(i, (r - ringInner) / (ringOuter - ringInner), 0.5)
-  }
-  const ringMat  = new THREE.MeshBasicMaterial({ map: ringTex, side: THREE.DoubleSide, transparent: true, depthWrite: false, opacity: 1.0 })
-  const ringMesh = new THREE.Mesh(ringGeo, ringMat)
-  ringMesh.rotation.x = Math.PI / 2.5
-  group.add(ringMesh)
-  group.rotation.z = 0.4665
-  return { group, mesh, dispose: () => { saturnGeo.dispose(); saturnMat.dispose(); ringGeo.dispose(); ringMat.dispose(); saturnTex.dispose(); ringTex.dispose() } }
-}
-
-function createUranus(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base      = import.meta.env.BASE_URL
-  const uranusTex = loader.load(base + 'earth/2k_uranus.jpg')
-  uranusTex.colorSpace = THREE.SRGBColorSpace
-  const group     = new THREE.Group()
-  const OUTER_SEGS = isMobile ? 16 : 32
-  const uranusGeo = new THREE.SphereGeometry(40, OUTER_SEGS, OUTER_SEGS)
-  const uranusMat = new THREE.MeshPhongMaterial({ map: uranusTex, shininess: 8, side: THREE.FrontSide })
-  const mesh      = new THREE.Mesh(uranusGeo, uranusMat)
-  group.add(mesh)
-  group.rotation.z = 1.706
-  return { group, mesh, dispose: () => { uranusGeo.dispose(); uranusMat.dispose(); uranusTex.dispose() } }
-}
-
-function createNeptune(loader: THREE.TextureLoader, isMobile: boolean): { group: THREE.Group; mesh: THREE.Mesh; dispose: () => void } {
-  const base       = import.meta.env.BASE_URL
-  const neptuneTex = loader.load(base + 'earth/2k_neptune.jpg')
-  neptuneTex.colorSpace = THREE.SRGBColorSpace
-  const group      = new THREE.Group()
-  const OUTER_SEGS = isMobile ? 16 : 32
-  const neptuneGeo = new THREE.SphereGeometry(38, OUTER_SEGS, OUTER_SEGS)
-  const neptuneMat = new THREE.MeshPhongMaterial({ map: neptuneTex, shininess: 8, side: THREE.FrontSide })
-  const mesh       = new THREE.Mesh(neptuneGeo, neptuneMat)
-  group.add(mesh)
-  group.rotation.z = 0.4942
-  return { group, mesh, dispose: () => { neptuneGeo.dispose(); neptuneMat.dispose(); neptuneTex.dispose() } }
-}
-
 // ── Scene constants ────────────────────────────────────────────────────────
 
 const NODE_COUNT_DESKTOP = 80
@@ -434,8 +316,8 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const w = container.clientWidth
     const h = container.clientHeight
     const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 13000)
-    camera.position.set(0, 60, 120)
-    camera.lookAt(0, 20, 0)
+    camera.position.set(0, 30, 80)
+    camera.lookAt(0, 8, 0)
 
     // ── Renderer ────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -762,114 +644,64 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
-    // ── 10.5. Planets (static decorative) ────────────────────────────────────
-    const mercuryObj = createMercury(sharedLoader, isMobile)
-    mercuryObj.group.position.set(-2800, 0, 20)
-    scene.add(mercuryObj.group)
-
-    const venusObj = createVenus(sharedLoader, isMobile)
-    venusObj.group.position.set(-2000, 0, -30)
-    scene.add(venusObj.group)
-
-    const marsObj = createMars(sharedLoader, isMobile)
-    marsObj.group.position.set(800, 0, 20)
-    scene.add(marsObj.group)
-
-    const jupiterObj = createJupiter(sharedLoader, isMobile)
-    jupiterObj.group.position.set(2500, 0, -40)
-    scene.add(jupiterObj.group)
-
-    const saturnObj = createSaturn(sharedLoader, isMobile)
-    saturnObj.group.position.set(4000, 0, 30)
-    scene.add(saturnObj.group)
-
-    const uranusObj = createUranus(sharedLoader, isMobile)
-    uranusObj.group.position.set(6000, 0, -20)
-    scene.add(uranusObj.group)
-
-    const neptuneObj = createNeptune(sharedLoader, isMobile)
-    neptuneObj.group.position.set(8000, 0, 10)
-    scene.add(neptuneObj.group)
-
-    // ── 11. Sun ───────────────────────────────────────────────────────────────
+    // ── 11. Hub-scale Sun at (-300, 0, 0) ────────────────────────────────────
+    const SUN_POS     = new THREE.Vector3(-300, 0, 0)
+    const SUN_SEGS    = isMobile ? 16 : 32
     const sunTex      = sharedLoader.load(base + 'stars/8k_sun.jpg')
-    const sunGeo      = new THREE.SphereGeometry(140, 64, 64)
+    const sunGeo      = new THREE.SphereGeometry(25, 32, 32)
     const sunMat      = new THREE.MeshBasicMaterial({ map: sunTex })
     const sunMesh     = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(-4000, 0, 0)
+    sunMesh.position.copy(SUN_POS)
     scene.add(sunMesh)
 
-    const SUN_SEGS = isMobile ? 16 : 32
-    const coronaGeo  = new THREE.SphereGeometry(161, SUN_SEGS, SUN_SEGS)
-    const coronaMat  = new THREE.MeshBasicMaterial({
-      color:       0xff9900,
-      transparent: true,
-      opacity:     0.55,
-      blending:    THREE.AdditiveBlending,
-      depthWrite:  false,
-      side:        THREE.BackSide,
-    })
+    const coronaGeo  = new THREE.SphereGeometry(30, SUN_SEGS, SUN_SEGS)
+    const coronaMat  = new THREE.MeshBasicMaterial({ color: 0xff9900, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
-    coronaMesh.position.set(-4000, 0, 0)
+    coronaMesh.position.copy(SUN_POS)
     scene.add(coronaMesh)
 
-    const sunGlowGeo  = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
-    const sunGlowMat  = new THREE.MeshBasicMaterial({
-      color:       0xffffaa,
-      transparent: true,
-      opacity:     0.7,
-      blending:    THREE.AdditiveBlending,
-      depthWrite:  false,
-      side:        THREE.BackSide,
-    })
+    const sunGlowGeo  = new THREE.SphereGeometry(40, SUN_SEGS, SUN_SEGS)
+    const sunGlowMat  = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
-    sunGlowMesh.position.set(-4000, 0, 0)
+    sunGlowMesh.position.copy(SUN_POS)
     scene.add(sunGlowMesh)
 
-    const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
-    const sunBloom1Mat = new THREE.MeshBasicMaterial({
-      color:       0xff8800,
-      transparent: true,
-      opacity:     0.35,
-      blending:    THREE.AdditiveBlending,
-      depthWrite:  false,
-      side:        THREE.BackSide,
-    })
+    const sunBloom1Geo  = new THREE.SphereGeometry(58, SUN_SEGS, SUN_SEGS)
+    const sunBloom1Mat  = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunBloom1Mesh = new THREE.Mesh(sunBloom1Geo, sunBloom1Mat)
-    sunBloom1Mesh.position.set(-4000, 0, 0)
+    sunBloom1Mesh.position.copy(SUN_POS)
     scene.add(sunBloom1Mesh)
 
-    const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
-    const sunBloom2Mat = new THREE.MeshBasicMaterial({
-      color:       0xffffff,
-      transparent: true,
-      opacity:     0.12,
-      blending:    THREE.AdditiveBlending,
-      depthWrite:  false,
-      side:        THREE.BackSide,
-    })
+    const sunBloom2Geo  = new THREE.SphereGeometry(90, SUN_SEGS, SUN_SEGS)
+    const sunBloom2Mat  = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.09, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunBloom2Mesh = new THREE.Mesh(sunBloom2Geo, sunBloom2Mat)
-    sunBloom2Mesh.position.set(-4000, 0, 0)
+    sunBloom2Mesh.position.copy(SUN_POS)
     scene.add(sunBloom2Mesh)
 
-    // Faint path line along X axis connecting all planets
-    const pathGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-4500, 0, 0),
-      new THREE.Vector3(8500,  0, 0),
-    ])
-    const pathMat = new THREE.LineBasicMaterial({
-      color:       0x334455,
-      transparent: true,
-      opacity:     0.15,
-      depthWrite:  false,
-    })
-    scene.add(new THREE.Line(pathGeo, pathMat))
-
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.5)
-    sunLight.position.set(-4000, 0, 0)
+    sunLight.position.copy(SUN_POS)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
+
+    // ── 12. Asteroid belt (hub scale — camera orbits inside at r=80) ──────────
+    const hubBelt = new AsteroidField({
+      innerRadius:   100,
+      outerRadius:   155,
+      count:         400,
+      countMobile:   100,
+      height:        18,
+      minScale:      0.3,
+      maxScale:      2.8,
+      seed:          77,
+      centerX:       0,
+      centerY:       0,
+      centerZ:       0,
+      color:         0x8a7a6a,
+      rotationSpeed: 0.00003,
+      inclination:   0.05,
+    }, isMobile)
+    hubBelt.addToScene(scene)
 
     // ── Resize ──────────────────────────────────────────────────────────────
     const onResize = () => {
@@ -928,11 +760,11 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
           onCompleteRef.current()
         }
       } else if (currentZoneRef.current === 'hub') {
-        const speed = isMobile ? 0.03 : 0.05
-        camera.position.x = 400 * Math.cos(t * speed + Math.PI / 2)
-        camera.position.z = 400 * Math.sin(t * speed + Math.PI / 2)
-        camera.position.y = 200 + Math.sin(t * 0.08) * 10
-        camera.lookAt(0, 0, 0)
+        const speed = isMobile ? 0.025 : 0.035
+        camera.position.x = 80 * Math.cos(t * speed)
+        camera.position.z = 80 * Math.sin(t * speed)
+        camera.position.y = 30 + Math.sin(t * speed * 1.4) * 16
+        camera.lookAt(0, 8, 0)
       } else {
         const base = camState.to.position
         camera.position.set(base[0], base[1] + Math.sin(t * 0.5) * 0.1, base[2])
@@ -1014,15 +846,8 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
         HUB_EARTH_POS.y + Math.sin(moonAngle * 0.2) * 8,
         HUB_EARTH_POS.z + Math.sin(moonAngle) * HUB_MOON_ORBIT_RADIUS,
       )
-      moonObj.mesh.rotation.y    += 0.0002
-      mercuryObj.mesh.rotation.y += 0.0008
-      venusObj.mesh.rotation.y   -= 0.0001
-      venusObj.atmoMesh.rotation.y -= 0.00015
-      marsObj.mesh.rotation.y    += 0.0004
-      jupiterObj.mesh.rotation.y += 0.001
-      saturnObj.mesh.rotation.y  += 0.0009
-      uranusObj.mesh.rotation.y  += 0.0003
-      neptuneObj.mesh.rotation.y += 0.00035
+      moonObj.mesh.rotation.y += 0.0002
+      hubBelt.update()
 
       renderer.render(scene, camera)
     }
@@ -1074,17 +899,12 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
       for (const tx of markerTextures) tx.dispose()
       earthObj.dispose()
       moonObj.dispose()
-      mercuryObj.dispose()
-      venusObj.dispose()
-      marsObj.dispose()
-      jupiterObj.dispose()
-      saturnObj.dispose()
-      uranusObj.dispose()
-      neptuneObj.dispose()
       sunGeo.dispose(); sunMat.dispose(); sunTex.dispose()
       coronaGeo.dispose(); coronaMat.dispose()
       sunGlowGeo.dispose(); sunGlowMat.dispose()
-      pathGeo.dispose(); pathMat.dispose()
+      sunBloom1Geo.dispose(); sunBloom1Mat.dispose()
+      sunBloom2Geo.dispose(); sunBloom2Mat.dispose()
+      hubBelt.dispose()
     }
   }, [cameraStateRef])
 

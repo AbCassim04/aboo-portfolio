@@ -17,7 +17,7 @@ interface CameraConfig {
 }
 
 const ZONE_CAMERAS: Record<Zone, CameraConfig> = {
-  hub:      { position: [0, 60, 120],   lookAt: [0, 20, 0],    fov: 60 },
+  hub:      { position: [0, 30, 80],    lookAt: [0, 8, 0],     fov: 60 },
   about:    { position: [-18, 50, -12], lookAt: [-6, 22, -4],  fov: 50 },
   skills:   { position: [18, 50, -12],  lookAt: [6, 22, -4],   fov: 50 },
   projects: { position: [0, 55, 12],    lookAt: [0, 26, 4],    fov: 50 },
