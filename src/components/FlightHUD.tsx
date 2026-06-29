@@ -140,9 +140,9 @@ export default function FlightHUD({
 
     rightManager.on('start', () => setRightActive(true))
     rightManager.on('move', (evt) => {
-      const { x, y } = evt.data.vector
-      inputRef.current.pitch    =  y
-      inputRef.current.vertical = -x
+      const { y } = evt.data.vector
+      inputRef.current.pitch    = -y
+      inputRef.current.vertical =  y
     })
     rightManager.on('end', () => {
       setRightActive(false)
