@@ -44,7 +44,7 @@ export class AsteroidField {
   private dummy:     THREE.Object3D
   private orbits:    AsteroidOrbit[]
   private scales:    number[]
-  private quats:     THREE.Quaternion[]
+  private rotations: THREE.Euler[]
   private time:      number = 2
   private isMobile:  boolean
   private scene:     THREE.Scene | null = null
@@ -95,9 +95,9 @@ export class AsteroidField {
     }
 
     // Generate Keplerian orbital elements + per-asteroid rotation/scale
-    this.orbits = []
-    this.scales = []
-    this.quats  = []
+    this.orbits    = []
+    this.scales    = []
+    this.rotations = []
 
     for (let i = 0; i < this.count; i++) {
       const a = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
@@ -112,14 +112,11 @@ export class AsteroidField {
         speed:         0.00003 + rand() * 0.00005,
       })
 
-      // Static rotation stored as quaternion — can't recover from zero matrix
-      this.dummy.rotation.set(
+      this.rotations.push(new THREE.Euler(
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
-      )
-      this.dummy.updateWorldMatrix(false, false)
-      this.quats.push(this.dummy.quaternion.clone())
+      ))
 
       // Power distribution — most asteroids small, few large
       const t = rand()
@@ -180,12 +177,16 @@ export class AsteroidField {
 
       const orbitPos = this.orbitalToCartesian(orbit)
 
+      // Tumble each asteroid independently — stored Euler avoids zero-matrix decompose bug
+      this.rotations[i].x += 0.0002
+      this.rotations[i].y += 0.0003
+
       this.dummy.position.set(
         this.config.centerX + orbitPos.x,
         this.config.centerY + orbitPos.y,
         this.config.centerZ + orbitPos.z,
       )
-      this.dummy.quaternion.copy(this.quats[i])
+      this.dummy.rotation.copy(this.rotations[i])
       this.dummy.scale.setScalar(this.scales[i])
       this.dummy.updateMatrix()
 
