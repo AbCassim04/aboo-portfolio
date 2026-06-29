@@ -40,7 +40,7 @@ export class AsteroidField {
   private config:  AsteroidFieldConfig
   private dummy:   THREE.Object3D
   private orbits:  AsteroidOrbit[]
-  private time:    number = 0
+  private time:    number = 2
   private isMobile: boolean
 
   constructor(config: AsteroidFieldConfig, isMobile: boolean) {
@@ -65,11 +65,8 @@ export class AsteroidField {
     pos.needsUpdate = true
     baseGeo.computeVertexNormals()
 
-    const mat = new THREE.MeshStandardMaterial({
-      color:       config.color,
-      roughness:   0.95,
-      metalness:   0.05,
-      flatShading: true,
+    const mat = new THREE.MeshBasicMaterial({
+      color: config.color,
     })
 
     this.mesh = new THREE.InstancedMesh(baseGeo, mat, count)
@@ -198,7 +195,7 @@ export const MAIN_BELT_CONFIG: AsteroidFieldConfig = {
   innerRadius:   1200,
   outerRadius:   1800,
   count:         3000,
-  countMobile:   500,
+  countMobile:   1000,
   height:        60,
   minScale:      0.5,
   maxScale:      6,
