@@ -36,9 +36,7 @@ function seededRandom(seed: number) {
 }
 
 export class AsteroidField {
-  private meshHigh:  THREE.InstancedMesh
-  private meshMed:   THREE.InstancedMesh
-  private meshLow:   THREE.InstancedMesh
+  private mesh:      THREE.InstancedMesh
   private count:     number
   private config:    AsteroidFieldConfig
   private dummy:     THREE.Object3D
@@ -49,9 +47,6 @@ export class AsteroidField {
   private isMobile:  boolean
   private scene:     THREE.Scene | null = null
 
-  // 0.0001 scale hides instances without triggering zero-matrix decompose issues
-  private readonly _hide = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001)
-
   constructor(config: AsteroidFieldConfig, isMobile: boolean) {
     this.config   = config
     this.isMobile = isMobile
@@ -60,9 +55,9 @@ export class AsteroidField {
     this.count = isMobile ? config.countMobile : config.count
     const rand = seededRandom(config.seed)
 
-    // High detail — vertex-displaced, 80 triangles
-    const geoHigh = new THREE.IcosahedronGeometry(1, 2)
-    const pos     = geoHigh.attributes.position as THREE.BufferAttribute
+    // Single geometry — medium detail works for all distances
+    const geo = new THREE.IcosahedronGeometry(1, 1)
+    const pos = geo.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < pos.count; i++) {
       pos.setXYZ(
         i,
@@ -72,29 +67,12 @@ export class AsteroidField {
       )
     }
     pos.needsUpdate = true
-    geoHigh.computeVertexNormals()
-
-    const geoMed = new THREE.IcosahedronGeometry(1, 1)  // 20 triangles
-    const geoLow = new THREE.IcosahedronGeometry(1, 0)  // 8 triangles
+    geo.computeVertexNormals()
 
     const mat = new THREE.MeshBasicMaterial({ color: config.color })
+    this.mesh = new THREE.InstancedMesh(geo, mat, this.count)
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
 
-    this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, this.count)
-    this.meshMed  = new THREE.InstancedMesh(geoMed,  mat, this.count)
-    this.meshLow  = new THREE.InstancedMesh(geoLow,  mat, this.count)
-
-    this.meshHigh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    this.meshMed.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    this.meshLow.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-
-    // Start all instances hidden; first update() places them
-    for (let i = 0; i < this.count; i++) {
-      this.meshHigh.setMatrixAt(i, this._hide)
-      this.meshMed.setMatrixAt(i, this._hide)
-      this.meshLow.setMatrixAt(i, this._hide)
-    }
-
-    // Generate Keplerian orbital elements + per-asteroid rotation/scale
     this.orbits    = []
     this.scales    = []
     this.rotations = []
@@ -112,21 +90,25 @@ export class AsteroidField {
         speed:         0.00003 + rand() * 0.00005,
       })
 
+      const t = rand()
+      this.scales.push(config.minScale + Math.pow(t, 3) * (config.maxScale - config.minScale))
       this.rotations.push(new THREE.Euler(
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
       ))
 
-      // Power distribution — most asteroids small, few large
-      const t = rand()
-      const scale = config.minScale + Math.pow(t, 3) * (config.maxScale - config.minScale)
-      this.scales.push(scale)
+      // Set initial matrix so asteroids appear before first update()
+      const orbit = this.orbits[i]
+      const p = this.orbitalToCartesian(orbit)
+      this.dummy.position.set(config.centerX + p.x, config.centerY + p.y, config.centerZ + p.z)
+      this.dummy.rotation.copy(this.rotations[i])
+      this.dummy.scale.setScalar(this.scales[i])
+      this.dummy.updateMatrix()
+      this.mesh.setMatrixAt(i, this.dummy.matrix)
     }
 
-    this.meshHigh.instanceMatrix.needsUpdate = true
-    this.meshMed.instanceMatrix.needsUpdate  = true
-    this.meshLow.instanceMatrix.needsUpdate  = true
+    this.mesh.instanceMatrix.needsUpdate = true
   }
 
   private orbitalToCartesian(orbit: AsteroidOrbit): THREE.Vector3 {
@@ -158,16 +140,13 @@ export class AsteroidField {
 
   addToScene(scene: THREE.Scene): void {
     this.scene = scene
-    scene.add(this.meshHigh)
-    scene.add(this.meshMed)
-    scene.add(this.meshLow)
+    scene.add(this.mesh)
   }
 
   update(cameraPosition?: THREE.Vector3): void {
+    void cameraPosition
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
-
-    const camPos = cameraPosition ?? new THREE.Vector3()
 
     for (let i = 0; i < this.orbits.length; i++) {
       const orbit = this.orbits[i]
@@ -175,53 +154,29 @@ export class AsteroidField {
       orbit.meanAnomaly += orbit.speed
       if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2
 
-      const orbitPos = this.orbitalToCartesian(orbit)
-
-      // Tumble each asteroid independently — stored Euler avoids zero-matrix decompose bug
-      this.rotations[i].x += 0.0002
-      this.rotations[i].y += 0.0003
+      const pos = this.orbitalToCartesian(orbit)
 
       this.dummy.position.set(
-        this.config.centerX + orbitPos.x,
-        this.config.centerY + orbitPos.y,
-        this.config.centerZ + orbitPos.z,
+        this.config.centerX + pos.x,
+        this.config.centerY + pos.y,
+        this.config.centerZ + pos.z,
       )
+
+      this.rotations[i].x += 0.0001
+      this.rotations[i].y += 0.00015
       this.dummy.rotation.copy(this.rotations[i])
       this.dummy.scale.setScalar(this.scales[i])
       this.dummy.updateMatrix()
-
-      const dist = this.dummy.position.distanceTo(camPos)
-
-      if (dist < 600) {
-        this.meshHigh.setMatrixAt(i, this.dummy.matrix)
-        this.meshMed.setMatrixAt(i, this._hide)
-        this.meshLow.setMatrixAt(i, this._hide)
-      } else if (dist < 2000) {
-        this.meshHigh.setMatrixAt(i, this._hide)
-        this.meshMed.setMatrixAt(i, this.dummy.matrix)
-        this.meshLow.setMatrixAt(i, this._hide)
-      } else {
-        this.meshHigh.setMatrixAt(i, this._hide)
-        this.meshMed.setMatrixAt(i, this._hide)
-        this.meshLow.setMatrixAt(i, this.dummy.matrix)
-      }
+      this.mesh.setMatrixAt(i, this.dummy.matrix)
     }
 
-    this.meshHigh.instanceMatrix.needsUpdate = true
-    this.meshMed.instanceMatrix.needsUpdate  = true
-    this.meshLow.instanceMatrix.needsUpdate  = true
+    this.mesh.instanceMatrix.needsUpdate = true
   }
 
   dispose(): void {
-    if (this.scene) {
-      this.scene.remove(this.meshHigh)
-      this.scene.remove(this.meshMed)
-      this.scene.remove(this.meshLow)
-    }
-    this.meshHigh.geometry.dispose()
-    this.meshMed.geometry.dispose()
-    this.meshLow.geometry.dispose()
-    ;(this.meshHigh.material as THREE.Material).dispose()
+    if (this.scene) this.scene.remove(this.mesh)
+    this.mesh.geometry.dispose()
+    ;(this.mesh.material as THREE.Material).dispose()
   }
 }
 
