@@ -49,8 +49,8 @@ export class AsteroidField {
   private isMobile:  boolean
   private scene:     THREE.Scene | null = null
 
-  // Pre-allocated temporaries to avoid per-frame allocation
-  private readonly _zero = new THREE.Matrix4().scale(new THREE.Vector3(0, 0, 0))
+  // 0.0001 scale hides instances without triggering zero-matrix decompose issues
+  private readonly _hide = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001)
 
   constructor(config: AsteroidFieldConfig, isMobile: boolean) {
     this.config   = config
@@ -89,9 +89,9 @@ export class AsteroidField {
 
     // Start all instances hidden; first update() places them
     for (let i = 0; i < this.count; i++) {
-      this.meshHigh.setMatrixAt(i, this._zero)
-      this.meshMed.setMatrixAt(i, this._zero)
-      this.meshLow.setMatrixAt(i, this._zero)
+      this.meshHigh.setMatrixAt(i, this._hide)
+      this.meshMed.setMatrixAt(i, this._hide)
+      this.meshLow.setMatrixAt(i, this._hide)
     }
 
     // Generate Keplerian orbital elements + per-asteroid rotation/scale
@@ -192,17 +192,17 @@ export class AsteroidField {
 
       const dist = this.dummy.position.distanceTo(camPos)
 
-      if (dist < 400) {
+      if (dist < 600) {
         this.meshHigh.setMatrixAt(i, this.dummy.matrix)
-        this.meshMed.setMatrixAt(i, this._zero)
-        this.meshLow.setMatrixAt(i, this._zero)
-      } else if (dist < 1200) {
-        this.meshHigh.setMatrixAt(i, this._zero)
+        this.meshMed.setMatrixAt(i, this._hide)
+        this.meshLow.setMatrixAt(i, this._hide)
+      } else if (dist < 2000) {
+        this.meshHigh.setMatrixAt(i, this._hide)
         this.meshMed.setMatrixAt(i, this.dummy.matrix)
-        this.meshLow.setMatrixAt(i, this._zero)
+        this.meshLow.setMatrixAt(i, this._hide)
       } else {
-        this.meshHigh.setMatrixAt(i, this._zero)
-        this.meshMed.setMatrixAt(i, this._zero)
+        this.meshHigh.setMatrixAt(i, this._hide)
+        this.meshMed.setMatrixAt(i, this._hide)
         this.meshLow.setMatrixAt(i, this.dummy.matrix)
       }
     }
