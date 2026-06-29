@@ -13,6 +13,7 @@
     "@types/three": "^0.184.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
+    "nipplejs": "^1.0.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "three": "^0.184.0"

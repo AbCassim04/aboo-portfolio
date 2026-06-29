@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
+import nipplejs from 'nipplejs'
 import type { FlightInput } from '../hooks/useFlightControls'
 
 export interface PlanetDot {
@@ -26,15 +27,7 @@ export default function FlightHUD({
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
-  const [leftKnob,   setLeftKnob]   = useState({ x: 0, y: 0 })
-  const [rightKnob,  setRightKnob]  = useState({ x: 0, y: 0 })
-  const radarRef      = useRef<HTMLCanvasElement>(null)
-  const leftStickRef  = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
-  const rightStickRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 })
-  const leftTouchId   = useRef<number | null>(null)
-  const rightTouchId  = useRef<number | null>(null)
-  const leftBaseRef   = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
-  const rightBaseRef  = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const radarRef = useRef<HTMLCanvasElement>(null)
 
   // Draw radar whenever position or planets change
   useEffect(() => {
@@ -103,93 +96,59 @@ export default function FlightHUD({
     ctx.stroke()
   }, [ufoX, ufoY, planetDots])
 
-  // Dual joystick touch handling
+  // Dual joystick — NippleJS
   useEffect(() => {
     if (!isMobile) return
 
-    const DEAD_ZONE  = 10
-    const MAX_RADIUS = 50
+    const leftZone  = document.getElementById('left-joystick-zone')
+    const rightZone = document.getElementById('right-joystick-zone')
+    if (!leftZone || !rightZone) return
 
-    function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)) }
-    // Squaring keeps the sign but makes small deflections far less sensitive
-    function curve(v: number) { return v * Math.abs(v) }
+    const leftManager = nipplejs.create({
+      zone:        leftZone,
+      mode:        'static',
+      position:    { left: '50%', top: '50%' },
+      color:       '#9b4fc0',
+      size:        120,
+      restOpacity: 0.5,
+    })
 
-    function onTouchStart(e: TouchEvent) {
-      for (const t of Array.from(e.changedTouches)) {
-        const isLeft = t.clientX < window.innerWidth / 2
-        if (isLeft && leftTouchId.current === null) {
-          leftTouchId.current  = t.identifier
-          leftBaseRef.current  = { x: t.clientX, y: t.clientY }
-          leftStickRef.current = { active: true, x: 0, y: 0 }
-        } else if (!isLeft && rightTouchId.current === null) {
-          rightTouchId.current  = t.identifier
-          rightBaseRef.current  = { x: t.clientX, y: t.clientY }
-          rightStickRef.current = { active: true, x: 0, y: 0 }
-        }
-      }
-    }
+    const rightManager = nipplejs.create({
+      zone:        rightZone,
+      mode:        'static',
+      position:    { left: '50%', top: '50%' },
+      color:       '#9b4fc0',
+      size:        120,
+      restOpacity: 0.5,
+    })
 
-    function onTouchMove(e: TouchEvent) {
-      e.preventDefault()
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === leftTouchId.current) {
-          const dx   = t.clientX - leftBaseRef.current.x
-          const dy   = t.clientY - leftBaseRef.current.y
-          const dist = Math.sqrt(dx*dx + dy*dy)
-          const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
-          const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
-          setLeftKnob({ x: cx, y: cy })
-          const nx = clamp(dx / MAX_RADIUS, -1, 1)
-          const ny = clamp(dy / MAX_RADIUS, -1, 1)
-          inputRef.current.yaw    = Math.abs(dx) > DEAD_ZONE ? curve(nx) : 0
-          inputRef.current.thrust = Math.abs(dy) > DEAD_ZONE && dy < 0 ? curve(-ny) : 0
-          inputRef.current.brake  = Math.abs(dy) > DEAD_ZONE && dy > 0 ? curve(ny)  : 0
-        }
-        if (t.identifier === rightTouchId.current) {
-          const dx   = t.clientX - rightBaseRef.current.x
-          const dy   = t.clientY - rightBaseRef.current.y
-          const dist = Math.sqrt(dx*dx + dy*dy)
-          const cx   = dist > MAX_RADIUS ? (dx/dist)*MAX_RADIUS : dx
-          const cy   = dist > MAX_RADIUS ? (dy/dist)*MAX_RADIUS : dy
-          setRightKnob({ x: cx, y: cy })
-          const ny = clamp(dy / MAX_RADIUS, -1, 1)
-          const nx = clamp(dx / MAX_RADIUS, -1, 1)
-          inputRef.current.vertical = Math.abs(dy) > DEAD_ZONE ? curve(-ny) : 0
-          inputRef.current.pitch    = Math.abs(dx) > DEAD_ZONE ? curve(nx)  : 0
-        }
-      }
-    }
+    leftManager.on('move', (evt) => {
+      const { x, y } = evt.data.vector
+      inputRef.current.yaw    =  x
+      inputRef.current.thrust =  y > 0 ? y : 0
+      inputRef.current.brake  =  y < 0 ? -y : 0
+    })
 
-    function onTouchEnd(e: TouchEvent) {
-      for (const t of Array.from(e.changedTouches)) {
-        if (t.identifier === leftTouchId.current) {
-          leftTouchId.current         = null
-          leftStickRef.current.active = false
-          setLeftKnob({ x: 0, y: 0 })
-          inputRef.current.yaw    = 0
-          inputRef.current.thrust = 0
-          inputRef.current.brake  = 0
-        }
-        if (t.identifier === rightTouchId.current) {
-          rightTouchId.current         = null
-          rightStickRef.current.active = false
-          setRightKnob({ x: 0, y: 0 })
-          inputRef.current.pitch    = 0
-          inputRef.current.vertical = 0
-        }
-      }
-    }
+    leftManager.on('end', () => {
+      inputRef.current.yaw    = 0
+      inputRef.current.thrust = 0
+      inputRef.current.brake  = 0
+    })
 
-    window.addEventListener('touchstart',  onTouchStart, { passive: false })
-    window.addEventListener('touchmove',   onTouchMove,  { passive: false })
-    window.addEventListener('touchend',    onTouchEnd,   { passive: false })
-    window.addEventListener('touchcancel', onTouchEnd,   { passive: false })
+    rightManager.on('move', (evt) => {
+      const { x, y } = evt.data.vector
+      inputRef.current.pitch    = -y
+      inputRef.current.vertical =  x
+    })
+
+    rightManager.on('end', () => {
+      inputRef.current.pitch    = 0
+      inputRef.current.vertical = 0
+    })
 
     return () => {
-      window.removeEventListener('touchstart',  onTouchStart)
-      window.removeEventListener('touchmove',   onTouchMove)
-      window.removeEventListener('touchend',    onTouchEnd)
-      window.removeEventListener('touchcancel', onTouchEnd)
+      leftManager.destroy()
+      rightManager.destroy()
     }
   }, [isMobile, inputRef])
 
@@ -416,82 +375,43 @@ export default function FlightHUD({
       {/* Dual joystick — mobile only */}
       {isMobile && (
         <>
-          {/* Left joystick — thrust + yaw */}
-          <div style={{
-            position:       'absolute',
-            bottom:         '7rem',
-            left:           '2rem',
-            width:          '120px',
-            height:         '120px',
-            borderRadius:   '50%',
-            background:     'rgba(155,79,192,0.12)',
-            border:         '1px solid rgba(155,79,192,0.35)',
-            pointerEvents:  'none',
-            touchAction:    'none',
-          }}>
-            <div style={{
-              width:        '40px',
-              height:       '40px',
-              borderRadius: '50%',
-              background:   'rgba(155,79,192,0.7)',
-              border:       '2px solid rgba(196,181,253,0.8)',
-              pointerEvents: 'none',
-              position:     'absolute',
-              top:          '50%',
-              left:         '50%',
-              marginTop:    '-20px',
-              marginLeft:   '-20px',
-              transform:    `translate(${leftKnob.x}px, ${leftKnob.y}px)`,
-              transition:   leftTouchId.current !== null ? 'none' : 'transform 0.15s ease',
-            }} />
-            <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>FWD</div>
-            <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>BRAKE</div>
-            <div style={{ position: 'absolute', left: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>◄</div>
-            <div style={{ position: 'absolute', right: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>►</div>
-          </div>
+          {/* Left joystick zone */}
+          <div
+            id="left-joystick-zone"
+            style={{
+              position:      'absolute',
+              bottom:        '5rem',
+              left:          0,
+              width:         '50%',
+              height:        '200px',
+              pointerEvents: 'auto',
+              touchAction:   'none',
+            }}
+          />
 
-          {/* Right joystick — pitch + vertical */}
-          <div style={{
-            position:       'absolute',
-            bottom:         '7rem',
-            right:          '2rem',
-            width:          '120px',
-            height:         '120px',
-            borderRadius:   '50%',
-            background:     'rgba(155,79,192,0.12)',
-            border:         '1px solid rgba(155,79,192,0.35)',
-            pointerEvents:  'none',
-            touchAction:    'none',
-          }}>
-            <div style={{
-              width:        '40px',
-              height:       '40px',
-              borderRadius: '50%',
-              background:   'rgba(155,79,192,0.7)',
-              border:       '2px solid rgba(196,181,253,0.8)',
-              pointerEvents: 'none',
-              position:     'absolute',
-              top:          '50%',
-              left:         '50%',
-              marginTop:    '-20px',
-              marginLeft:   '-20px',
-              transform:    `translate(${rightKnob.x}px, ${rightKnob.y}px)`,
-              transition:   rightTouchId.current !== null ? 'none' : 'transform 0.15s ease',
-            }} />
-            <div style={{ position: 'absolute', top: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>UP</div>
-            <div style={{ position: 'absolute', bottom: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>DOWN</div>
-            <div style={{ position: 'absolute', left: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>◄</div>
-            <div style={{ position: 'absolute', right: '4px', fontSize: '0.55rem', color: 'rgba(196,181,253,0.5)', letterSpacing: '0.1em' }}>►</div>
-          </div>
+          {/* Right joystick zone */}
+          <div
+            id="right-joystick-zone"
+            style={{
+              position:      'absolute',
+              bottom:        '5rem',
+              right:         0,
+              width:         '50%',
+              height:        '200px',
+              pointerEvents: 'auto',
+              touchAction:   'none',
+            }}
+          />
 
-          {/* BOOST + LAND — bottom center */}
+          {/* BOOST + LAND */}
           <div style={{
             position:  'absolute',
-            bottom:    '1.5rem',
+            bottom:    '1rem',
             left:      '50%',
             transform: 'translateX(-50%)',
             display:   'flex',
             gap:       '1rem',
+            zIndex:    100,
           }}>
             <button
               onTouchStart={() => {
@@ -512,7 +432,7 @@ export default function FlightHUD({
             >BOOST</button>
             <button
               onTouchStart={() => { inputRef.current.land = true }}
-              onTouchEnd={() => { inputRef.current.land = false }}
+              onTouchEnd={()  => { inputRef.current.land = false }}
               onTouchCancel={() => { inputRef.current.land = false }}
               style={{
                 ...arrowBtnStyle,
