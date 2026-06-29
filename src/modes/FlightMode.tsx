@@ -662,7 +662,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── Scene / Camera / Renderer ──────────────────────────────────────────
     const scene    = new THREE.Scene()
-    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 5000)
+    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 12000)
     const renderer = new THREE.WebGLRenderer({ antialias: !isMobile })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
@@ -679,7 +679,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const ambientLight = new THREE.AmbientLight(0x111122, 0.08)
     scene.add(ambientLight)
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.5)
-    sunLight.position.set(-1500, 0, 0)
+    sunLight.position.set(-4000, 0, 0)
     sunLight.target.position.set(0, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
@@ -1004,7 +1004,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     }
 
     // ── 11. Boundary sphere ────────────────────────────────────────────────
-    const boundGeo = new THREE.SphereGeometry(2600, 16, 12)
+    const boundGeo = new THREE.SphereGeometry(9000, 16, 12)
     const boundMat = new THREE.MeshBasicMaterial({ color: 0x7721b1, wireframe: true, transparent: true, opacity: 0.02 })
     scene.add(new THREE.Mesh(boundGeo, boundMat))
 
@@ -1054,31 +1054,31 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader, isMobile)
-    mercuryObj.group.position.set(-900, 0, 20)
+    mercuryObj.group.position.set(-2800, 0, 20)
     scene.add(mercuryObj.group)
 
     const venusObj = createVenus(sharedLoader, isMobile)
-    venusObj.group.position.set(-650, 0, -30)
+    venusObj.group.position.set(-2000, 0, -30)
     scene.add(venusObj.group)
 
     const marsObj = createMars(sharedLoader, isMobile)
-    marsObj.group.position.set(300, 0, 20)
+    marsObj.group.position.set(800, 0, 20)
     scene.add(marsObj.group)
 
     const jupiterObj = createJupiter(sharedLoader, isMobile)
-    jupiterObj.group.position.set(800, 0, -40)
+    jupiterObj.group.position.set(2500, 0, -40)
     scene.add(jupiterObj.group)
 
     const saturnObj = createSaturn(sharedLoader, isMobile)
-    saturnObj.group.position.set(1400, 0, 30)
+    saturnObj.group.position.set(4000, 0, 30)
     scene.add(saturnObj.group)
 
     const uranusObj = createUranus(sharedLoader, isMobile)
-    uranusObj.group.position.set(1900, 0, -20)
+    uranusObj.group.position.set(6000, 0, -20)
     scene.add(uranusObj.group)
 
     const neptuneObj = createNeptune(sharedLoader, isMobile)
-    neptuneObj.group.position.set(2300, 0, 10)
+    neptuneObj.group.position.set(8000, 0, 10)
     scene.add(neptuneObj.group)
 
     // Asteroid belt
@@ -1090,7 +1090,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const sunGeo     = new THREE.SphereGeometry(140, 64, 64)
     const sunMat     = new THREE.MeshBasicMaterial({ map: sunTexture })
     const sunMesh    = new THREE.Mesh(sunGeo, sunMat)
-    sunMesh.position.set(-1500, 0, 0)
+    sunMesh.position.set(-4000, 0, 0)
     scene.add(sunMesh)
 
     const SUN_SEGS = isMobile ? 16 : 32
@@ -1103,7 +1103,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    coronaGeo.translate(-1500, 0, 0)
+    coronaGeo.translate(-4000, 0, 0)
     scene.add(new THREE.Mesh(coronaGeo, coronaMat))
 
     const sunGlowGeo = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
@@ -1115,7 +1115,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunGlowGeo.translate(-1500, 0, 0)
+    sunGlowGeo.translate(-4000, 0, 0)
     scene.add(new THREE.Mesh(sunGlowGeo, sunGlowMat))
 
     const sunBloom1Geo = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
@@ -1127,7 +1127,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunBloom1Geo.translate(-1500, 0, 0)
+    sunBloom1Geo.translate(-4000, 0, 0)
     scene.add(new THREE.Mesh(sunBloom1Geo, sunBloom1Mat))
 
     const sunBloom2Geo = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
@@ -1139,13 +1139,13 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       depthWrite:  false,
       side:        THREE.BackSide,
     })
-    sunBloom2Geo.translate(-1500, 0, 0)
+    sunBloom2Geo.translate(-4000, 0, 0)
     scene.add(new THREE.Mesh(sunBloom2Geo, sunBloom2Mat))
 
     // Faint path line along X axis connecting all planets
     const pathGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-1400, 0, 0),
-      new THREE.Vector3(2500, 0, 0),
+      new THREE.Vector3(-4500, 0, 0),
+      new THREE.Vector3(8500,  0, 0),
     ])
     const pathMat = new THREE.LineBasicMaterial({
       color:       0x334455,

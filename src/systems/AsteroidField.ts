@@ -195,11 +195,11 @@ export class AsteroidField {
 // ── Pre-defined field configurations ──────────────────────────────────────────
 
 export const MAIN_BELT_CONFIG: AsteroidFieldConfig = {
-  innerRadius:   470,
-  outerRadius:   650,
+  innerRadius:   1200,
+  outerRadius:   1800,
   count:         3000,
   countMobile:   500,
-  height:        40,
+  height:        60,
   minScale:      0.5,
   maxScale:      6,
   seed:          42,

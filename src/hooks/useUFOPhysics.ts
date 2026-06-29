@@ -73,11 +73,11 @@ export function useUFOPhysics(
 
     // Soft boundary pull at 2580u, hard clamp at 2600u
     const dist = state.position.length()
-    if (dist > 2580) {
+    if (dist > 8980) {
       _pull.copy(state.position).normalize().multiplyScalar(-0.012)
       state.velocity.add(_pull)
     }
-    if (dist > 2600) state.position.normalize().multiplyScalar(2600)
+    if (dist > 9000) state.position.normalize().multiplyScalar(9000)
   }
 
   return { ufoStateRef, update }
