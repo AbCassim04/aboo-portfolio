@@ -662,7 +662,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── Scene / Camera / Renderer ──────────────────────────────────────────
     const scene    = new THREE.Scene()
-    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 12000)
+    const camera   = new THREE.PerspectiveCamera(65, container.clientWidth / container.clientHeight, 0.1, 13000)
     const renderer = new THREE.WebGLRenderer({ antialias: !isMobile })
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
@@ -695,13 +695,13 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     const milkyTex  = skyLoader.load(base + 'stars/8k_stars_milky_way.jpg')
     milkyTex.colorSpace = THREE.SRGBColorSpace
-    const milkyGeo  = new THREE.SphereGeometry(1600, SKY_SEGS, SKY_SEGS)
+    const milkyGeo  = new THREE.SphereGeometry(10000, SKY_SEGS, SKY_SEGS)
     const milkyMat  = new THREE.MeshBasicMaterial({ map: milkyTex, side: THREE.BackSide, transparent: true, opacity: 0.9 })
     const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat)
     scene.add(milkyMesh)
 
     const hippTex  = skyLoader.load(base + 'stars/hipp8.jpg')
-    const hippGeo  = new THREE.SphereGeometry(1700, SKY_SEGS, SKY_SEGS)
+    const hippGeo  = new THREE.SphereGeometry(11000, SKY_SEGS, SKY_SEGS)
     const hippMat  = new THREE.MeshBasicMaterial({ map: hippTex, side: THREE.BackSide, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
     const hippMesh = new THREE.Mesh(hippGeo, hippMat)
     if (!isMobile) {
@@ -709,7 +709,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     }
 
     const tychoTex  = skyLoader.load(base + 'stars/tycho8.jpg')
-    const tychoGeo  = new THREE.SphereGeometry(1800, SKY_SEGS, SKY_SEGS)
+    const tychoGeo  = new THREE.SphereGeometry(12000, SKY_SEGS, SKY_SEGS)
     const tychoMat  = new THREE.MeshBasicMaterial({ map: tychoTex, side: THREE.BackSide, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
     const tychoMesh = new THREE.Mesh(tychoGeo, tychoMat)
     scene.add(tychoMesh)
