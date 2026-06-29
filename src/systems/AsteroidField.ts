@@ -15,6 +15,8 @@ export interface AsteroidFieldConfig {
   color:            number
   rotationSpeed:    number
   inclination:      number
+  kirkwoodGaps?:    number[]  // orbital radii where gaps exist (optional)
+  clusterCount?:    number    // number of dense clusters (optional)
 }
 
 interface AsteroidOrbit {
@@ -33,6 +35,26 @@ function seededRandom(seed: number) {
     s = (s * 1664525 + 1013904223) & 0xffffffff
     return (s >>> 0) / 0xffffffff
   }
+}
+
+// Simple value noise — good enough for density distribution
+function noise2D(x: number, y: number): number {
+  const X = Math.floor(x) & 255
+  const Y = Math.floor(y) & 255
+  const xf = x - Math.floor(x)
+  const yf = y - Math.floor(y)
+  const u = xf * xf * (3 - 2 * xf)
+  const v = yf * yf * (3 - 2 * yf)
+  // Hash function
+  const a  = (X * 1619 + Y * 31337 + 1013) & 0xffff
+  const b  = ((X+1) * 1619 + Y * 31337 + 1013) & 0xffff
+  const c  = (X * 1619 + (Y+1) * 31337 + 1013) & 0xffff
+  const d  = ((X+1) * 1619 + (Y+1) * 31337 + 1013) & 0xffff
+  const na = (a / 0xffff) * 2 - 1
+  const nb = (b / 0xffff) * 2 - 1
+  const nc = (c / 0xffff) * 2 - 1
+  const nd = (d / 0xffff) * 2 - 1
+  return na + u * (nb - na) + v * (nc - na) + u * v * (na - nb - nc + nd)
 }
 
 export class AsteroidField {
@@ -73,6 +95,8 @@ export class AsteroidField {
 
     const mat = new THREE.MeshBasicMaterial({ color: config.color })
 
+    // Allocate for the full count — actual placed count may be less due to
+    // gap/density rejection, but we pre-allocate the maximum capacity.
     this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, count)
     this.meshMid  = new THREE.InstancedMesh(geoMid,  mat, count)
     this.meshLow  = new THREE.InstancedMesh(geoLow,  mat, count)
@@ -86,19 +110,11 @@ export class AsteroidField {
     this.meshLow.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
 
     // Pre-set a permanent bounding sphere covering every possible asteroid
-    // position across all three meshes.
-    //
-    // Three.js (r184) Frustum.intersectsObject() calls computeBoundingSphere()
-    // only when boundingSphere === null, then caches the result forever.
-    // The default lazy path is broken for this LOD pattern: when nearCount=0
-    // on the first render (camera at origin, belt at r=1200-1800), the cached
-    // sphere for meshHigh gets radius=-1 (makeEmpty()), permanently culling it.
-    //
-    // By pre-setting a non-null sphere here, Three.js never calls
-    // computeBoundingSphere() at all. The sphere must encompass all instances
-    // regardless of which LOD bucket they land in:
-    //   outerRadius + maxScale × 1.5  (1.5 > max displaced vertex radius 1.25)
-    //   = 1800 + 6×1.5 = 1809 → rounded to 1810 for margin
+    // position across all three meshes. Three.js (r184) Frustum.intersectsObject()
+    // only calls computeBoundingSphere() when boundingSphere === null, then caches
+    // forever. When nearCount=0 on the first render, that lazy path produces an
+    // empty sphere (radius=-1) which permanently culls meshHigh. Pre-setting a
+    // correct non-null sphere prevents that entirely.
     const beltCenter = new THREE.Vector3(config.centerX, config.centerY, config.centerZ)
     const beltRadius = config.outerRadius + config.maxScale * 1.5
     const beltSphere = new THREE.Sphere(beltCenter, beltRadius)
@@ -111,9 +127,62 @@ export class AsteroidField {
     this.scales    = []
     this.rotations = []
 
-    for (let i = 0; i < count; i++) {
-      const a = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
+    // ── Density-aware placement ────────────────────────────────────────────
 
+    // Generate cluster centers for asteroid families
+    const clusterCount  = config.clusterCount ?? 0
+    const clusterAngles: number[] = []
+    const clusterRadii:  number[] = []
+    for (let c = 0; c < clusterCount; c++) {
+      clusterAngles.push(rand() * Math.PI * 2)
+      clusterRadii.push(
+        config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
+      )
+    }
+
+    let placed      = 0
+    let attempts    = 0
+    const maxAttempts = count * 20  // avoid infinite loop
+
+    while (placed < count && attempts < maxAttempts) {
+      attempts++
+
+      const angle  = rand() * Math.PI * 2
+      const radius = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
+
+      // ── Kirkwood gap rejection ───────────────────────────────────────
+      const gaps = config.kirkwoodGaps ?? []
+      let inGap = false
+      for (const gapRadius of gaps) {
+        if (Math.abs(radius - gapRadius) < 30) {  // 30 unit gap width
+          inGap = true
+          break
+        }
+      }
+      if (inGap && rand() > 0.05) continue  // 95% rejection in gap zones
+
+      // ── Cluster density boost ────────────────────────────────────────
+      let densityBoost = 1.0
+      for (let c = 0; c < clusterAngles.length; c++) {
+        const dAngle  = Math.abs(angle - clusterAngles[c])
+        const dRadius = Math.abs(radius - clusterRadii[c])
+        const dist    = Math.sqrt(dAngle * dAngle * 10000 + dRadius * dRadius)
+        if (dist < 150) {
+          densityBoost = 3.0  // 3x denser inside clusters
+          break
+        }
+      }
+
+      // ── Noise-based density variation ────────────────────────────────
+      const noiseVal = noise2D(Math.cos(angle) * 3, Math.sin(angle) * 3)
+      const density  = 0.5 + 0.5 * noiseVal  // 0 to 1
+
+      // Higher densityBoost = more likely to place = lower rejection threshold
+      const acceptProbability = Math.min(1.0, density * densityBoost)
+      if (rand() > acceptProbability) continue
+
+      // ── Place the asteroid ───────────────────────────────────────────
+      const a = radius
       this.orbits.push({
         semiMajorAxis: a,
         eccentricity:  rand() * 0.15,
@@ -131,7 +200,10 @@ export class AsteroidField {
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
       ))
+
+      placed++
     }
+    // this.orbits.length === placed; update() uses this.orbits.length directly
   }
 
   private orbitalToCartesian(orbit: AsteroidOrbit): THREE.Vector3 {
@@ -240,7 +312,7 @@ export const MAIN_BELT_CONFIG: AsteroidFieldConfig = {
   innerRadius:   1200,
   outerRadius:   1800,
   count:         3000,
-  countMobile:   1000,
+  countMobile:   500,
   height:        60,
   minScale:      0.5,
   maxScale:      6,
@@ -250,5 +322,9 @@ export const MAIN_BELT_CONFIG: AsteroidFieldConfig = {
   centerZ:       0,
   color:         0x8a7a6a,
   rotationSpeed: 0.00003,
-  inclination:   0.035,
+  inclination:   0.15,
+  // Kirkwood gaps at real resonance ratios with Jupiter
+  // In our scale: belt spans 1200-1800, gaps at ~25%, 40%, 55% of belt width
+  kirkwoodGaps:  [1350, 1480, 1620],  // 3:1, 5:2, 7:3 resonances
+  clusterCount:  8,                    // 8 denser asteroid families
 }
