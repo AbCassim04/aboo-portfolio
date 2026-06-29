@@ -27,8 +27,6 @@ export default function FlightHUD({
 }: FlightHUDProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
-  const [leftActive,  setLeftActive]  = useState(false)
-  const [rightActive, setRightActive] = useState(false)
   const radarRef = useRef<HTMLCanvasElement>(null)
 
   // Draw radar whenever position or planets change
@@ -124,7 +122,12 @@ export default function FlightHUD({
       restOpacity: 0.5,
     })
 
-    leftManager.on('start', () => setLeftActive(true))
+    leftManager.on('start', () => {
+      document.querySelectorAll('#left-joystick-zone .nipple').forEach(el => {
+        el.classList.add('active')
+        el.classList.remove('inactive')
+      })
+    })
     leftManager.on('move', (evt) => {
       const { x, y } = evt.data.vector
       inputRef.current.yaw    =  x
@@ -132,22 +135,33 @@ export default function FlightHUD({
       inputRef.current.brake  =  y < 0 ? -y : 0
     })
     leftManager.on('end', () => {
-      setLeftActive(false)
+      document.querySelectorAll('#left-joystick-zone .nipple').forEach(el => {
+        el.classList.add('inactive')
+        el.classList.remove('active')
+      })
       inputRef.current.yaw    = 0
       inputRef.current.thrust = 0
       inputRef.current.brake  = 0
     })
 
-    rightManager.on('start', () => setRightActive(true))
+    rightManager.on('start', () => {
+      document.querySelectorAll('#right-joystick-zone .nipple').forEach(el => {
+        el.classList.add('active')
+        el.classList.remove('inactive')
+      })
+    })
     rightManager.on('move', (evt) => {
-      const { y } = evt.data.vector
-      inputRef.current.pitch    = -y
-      inputRef.current.vertical =  y
+      const { x, y } = evt.data.vector
+      inputRef.current.vertical = -y
+      inputRef.current.pitch    =  x
     })
     rightManager.on('end', () => {
-      setRightActive(false)
-      inputRef.current.pitch    = 0
+      document.querySelectorAll('#right-joystick-zone .nipple').forEach(el => {
+        el.classList.add('inactive')
+        el.classList.remove('active')
+      })
       inputRef.current.vertical = 0
+      inputRef.current.pitch    = 0
     })
 
     return () => {
@@ -173,16 +187,19 @@ export default function FlightHUD({
   const speedPct = Math.round(speed * 100)
 
   const arrowBtnStyle: React.CSSProperties = {
-    width: '52px', height: '52px',
+    width:        '80px',
+    height:       '80px',
     borderRadius: '12px',
-    background: 'rgba(155,79,192,0.25)',
-    border: '1px solid rgba(155,79,192,0.5)',
-    color: '#c4b5fd',
-    fontSize: '1.2rem',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    touchAction: 'none',
-    userSelect: 'none',
-    cursor: 'pointer',
+    background:   'rgba(155,79,192,0.25)',
+    border:       '1px solid rgba(155,79,192,0.5)',
+    color:        '#c4b5fd',
+    fontSize:     '0.75rem',
+    display:      'flex',
+    alignItems:   'center',
+    justifyContent: 'center',
+    touchAction:  'none',
+    userSelect:   'none',
+    cursor:       'pointer',
     WebkitUserSelect: 'none',
     pointerEvents: 'auto',
   }
@@ -389,6 +406,15 @@ export default function FlightHUD({
               background: rgba(155, 79, 192, 0.15) !important;
               border: 1px solid rgba(155, 79, 192, 0.4) !important;
             }
+            .nipple {
+              transition: opacity 0.5s ease !important;
+            }
+            .nipple.inactive {
+              opacity: 0.15 !important;
+            }
+            .nipple.active {
+              opacity: 1.0 !important;
+            }
           `}</style>
 
           {/* Left label */}
@@ -420,12 +446,10 @@ export default function FlightHUD({
               position:      'absolute',
               bottom:        '5rem',
               left:          0,
-              width:         '50%',
-              height:        '220px',
+              width:         '55%',
+              height:        '260px',
               pointerEvents: 'auto',
               touchAction:   'none',
-              opacity:       leftActive ? 1 : 0.3,
-              transition:    'opacity 0.5s ease',
             }}
           />
 
@@ -436,12 +460,10 @@ export default function FlightHUD({
               position:      'absolute',
               bottom:        '5rem',
               right:         0,
-              width:         '50%',
-              height:        '220px',
+              width:         '55%',
+              height:        '260px',
               pointerEvents: 'auto',
               touchAction:   'none',
-              opacity:       rightActive ? 1 : 0.3,
-              transition:    'opacity 0.5s ease',
             }}
           />
 
@@ -466,9 +488,7 @@ export default function FlightHUD({
                 ...arrowBtnStyle,
                 background:    'rgba(139,92,246,0.3)',
                 border:        '1px solid rgba(139,92,246,0.6)',
-                fontSize:      '0.6rem',
                 letterSpacing: '0.1em',
-                width:         '64px',
                 pointerEvents: 'auto',
               }}
             >BOOST</button>
@@ -480,9 +500,7 @@ export default function FlightHUD({
                 ...arrowBtnStyle,
                 background:    'rgba(34,197,94,0.3)',
                 border:        '1px solid rgba(34,197,94,0.6)',
-                fontSize:      '0.6rem',
                 letterSpacing: '0.1em',
-                width:         '64px',
                 pointerEvents: 'auto',
               }}
             >LAND</button>
