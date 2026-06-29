@@ -36,8 +36,9 @@ function seededRandom(seed: number) {
 }
 
 export class AsteroidField {
-  private mesh:      THREE.InstancedMesh
-  private count:     number
+  private meshHigh:  THREE.InstancedMesh
+  private meshMid:   THREE.InstancedMesh
+  private meshLow:   THREE.InstancedMesh
   private config:    AsteroidFieldConfig
   private dummy:     THREE.Object3D
   private orbits:    AsteroidOrbit[]
@@ -52,32 +53,65 @@ export class AsteroidField {
     this.isMobile = isMobile
     this.dummy    = new THREE.Object3D()
 
-    this.count = isMobile ? config.countMobile : config.count
-    const rand = seededRandom(config.seed)
+    const count = isMobile ? config.countMobile : config.count
+    const rand  = seededRandom(config.seed)
 
-    // Single geometry — medium detail works for all distances
-    const geo = new THREE.IcosahedronGeometry(1, 1)
-    const pos = geo.attributes.position as THREE.BufferAttribute
-    for (let i = 0; i < pos.count; i++) {
-      pos.setXYZ(
-        i,
-        pos.getX(i) * (0.75 + rand() * 0.5),
-        pos.getY(i) * (0.75 + rand() * 0.5),
-        pos.getZ(i) * (0.75 + rand() * 0.5),
+    const geoHigh = new THREE.IcosahedronGeometry(1, 2)
+    const posAttr  = geoHigh.attributes.position as THREE.BufferAttribute
+    for (let i = 0; i < posAttr.count; i++) {
+      posAttr.setXYZ(i,
+        posAttr.getX(i) * (0.75 + rand() * 0.5),
+        posAttr.getY(i) * (0.75 + rand() * 0.5),
+        posAttr.getZ(i) * (0.75 + rand() * 0.5),
       )
     }
-    pos.needsUpdate = true
-    geo.computeVertexNormals()
+    posAttr.needsUpdate = true
+    geoHigh.computeVertexNormals()
+
+    const geoMid = new THREE.IcosahedronGeometry(1, 1)
+    const geoLow = new THREE.IcosahedronGeometry(1, 0)
 
     const mat = new THREE.MeshBasicMaterial({ color: config.color })
-    this.mesh = new THREE.InstancedMesh(geo, mat, this.count)
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+
+    this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, count)
+    this.meshMid  = new THREE.InstancedMesh(geoMid,  mat, count)
+    this.meshLow  = new THREE.InstancedMesh(geoLow,  mat, count)
+
+    this.meshHigh.count = 0
+    this.meshMid.count  = 0
+    this.meshLow.count  = 0
+
+    this.meshHigh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    this.meshMid.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    this.meshLow.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+
+    // Pre-set a permanent bounding sphere covering every possible asteroid
+    // position across all three meshes.
+    //
+    // Three.js (r184) Frustum.intersectsObject() calls computeBoundingSphere()
+    // only when boundingSphere === null, then caches the result forever.
+    // The default lazy path is broken for this LOD pattern: when nearCount=0
+    // on the first render (camera at origin, belt at r=1200-1800), the cached
+    // sphere for meshHigh gets radius=-1 (makeEmpty()), permanently culling it.
+    //
+    // By pre-setting a non-null sphere here, Three.js never calls
+    // computeBoundingSphere() at all. The sphere must encompass all instances
+    // regardless of which LOD bucket they land in:
+    //   outerRadius + maxScale × 1.5  (1.5 > max displaced vertex radius 1.25)
+    //   = 1800 + 6×1.5 = 1809 → rounded to 1810 for margin
+    const beltCenter = new THREE.Vector3(config.centerX, config.centerY, config.centerZ)
+    const beltRadius = config.outerRadius + config.maxScale * 1.5
+    const beltSphere = new THREE.Sphere(beltCenter, beltRadius)
+
+    this.meshHigh.boundingSphere = beltSphere.clone()
+    this.meshMid.boundingSphere  = beltSphere.clone()
+    this.meshLow.boundingSphere  = beltSphere.clone()
 
     this.orbits    = []
     this.scales    = []
     this.rotations = []
 
-    for (let i = 0; i < this.count; i++) {
+    for (let i = 0; i < count; i++) {
       const a = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
 
       this.orbits.push({
@@ -97,18 +131,7 @@ export class AsteroidField {
         rand() * Math.PI * 2,
         rand() * Math.PI * 2,
       ))
-
-      // Set initial matrix so asteroids appear before first update()
-      const orbit = this.orbits[i]
-      const p = this.orbitalToCartesian(orbit)
-      this.dummy.position.set(config.centerX + p.x, config.centerY + p.y, config.centerZ + p.z)
-      this.dummy.rotation.copy(this.rotations[i])
-      this.dummy.scale.setScalar(this.scales[i])
-      this.dummy.updateMatrix()
-      this.mesh.setMatrixAt(i, this.dummy.matrix)
     }
-
-    this.mesh.instanceMatrix.needsUpdate = true
   }
 
   private orbitalToCartesian(orbit: AsteroidOrbit): THREE.Vector3 {
@@ -140,13 +163,23 @@ export class AsteroidField {
 
   addToScene(scene: THREE.Scene): void {
     this.scene = scene
-    scene.add(this.mesh)
+    scene.add(this.meshHigh)
+    scene.add(this.meshMid)
+    scene.add(this.meshLow)
   }
 
   update(cameraPosition?: THREE.Vector3): void {
-    void cameraPosition
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
+
+    const camPos = cameraPosition ?? new THREE.Vector3()
+
+    const NEAR_SQ = 400  * 400
+    const MID_SQ  = 1500 * 1500
+
+    let nearCount = 0
+    let midCount  = 0
+    let farCount  = 0
 
     for (let i = 0; i < this.orbits.length; i++) {
       const orbit = this.orbits[i]
@@ -156,27 +189,48 @@ export class AsteroidField {
 
       const pos = this.orbitalToCartesian(orbit)
 
+      this.rotations[i].x += 0.0001
+      this.rotations[i].y += 0.00015
+
       this.dummy.position.set(
         this.config.centerX + pos.x,
         this.config.centerY + pos.y,
         this.config.centerZ + pos.z,
       )
-
-      this.rotations[i].x += 0.0001
-      this.rotations[i].y += 0.00015
       this.dummy.rotation.copy(this.rotations[i])
       this.dummy.scale.setScalar(this.scales[i])
       this.dummy.updateMatrix()
-      this.mesh.setMatrixAt(i, this.dummy.matrix)
+
+      const dSq = this.dummy.position.distanceToSquared(camPos)
+
+      if (dSq < NEAR_SQ) {
+        this.meshHigh.setMatrixAt(nearCount++, this.dummy.matrix)
+      } else if (dSq < MID_SQ) {
+        this.meshMid.setMatrixAt(midCount++, this.dummy.matrix)
+      } else {
+        this.meshLow.setMatrixAt(farCount++, this.dummy.matrix)
+      }
     }
 
-    this.mesh.instanceMatrix.needsUpdate = true
+    this.meshHigh.count = nearCount
+    this.meshMid.count  = midCount
+    this.meshLow.count  = farCount
+
+    this.meshHigh.instanceMatrix.needsUpdate = true
+    this.meshMid.instanceMatrix.needsUpdate  = true
+    this.meshLow.instanceMatrix.needsUpdate  = true
   }
 
   dispose(): void {
-    if (this.scene) this.scene.remove(this.mesh)
-    this.mesh.geometry.dispose()
-    ;(this.mesh.material as THREE.Material).dispose()
+    if (this.scene) {
+      this.scene.remove(this.meshHigh)
+      this.scene.remove(this.meshMid)
+      this.scene.remove(this.meshLow)
+    }
+    this.meshHigh.geometry.dispose()
+    this.meshMid.geometry.dispose()
+    this.meshLow.geometry.dispose()
+    ;(this.meshHigh.material as THREE.Material).dispose()
   }
 }
 
