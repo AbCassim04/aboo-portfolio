@@ -146,7 +146,8 @@ const FRAG = /* glsl */`
     // HSL range 0.3-0.6 used when generating tints)
     vec3 tintedCol = col.rgb * vInstanceColor * 2.0;
 
-    vec3 litCol = tintedCol * (ambientCol * 2.0 + vec3(diff)) + vec3(spec);
+    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 0.8)) + vec3(spec * 0.5);
+    litCol = max(litCol, tintedCol * 0.4);
     gl_FragColor = vec4(litCol, 1.0);
   }
 `
@@ -213,8 +214,8 @@ export class AsteroidField {
         roughMap:    { value: this.roughTex },
         sharpness:   { value: 4.0 },
         scale:       { value: 0.4 },
-        sunDir:      { value: new THREE.Vector3(-1, 0.2, 0.1).normalize() },
-        ambientCol:  { value: new THREE.Color(0x444455) },
+        sunDir:      { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
+        ambientCol:  { value: new THREE.Color(0x888899) },
       },
       vertexShader:   VERT,
       fragmentShader: FRAG,
