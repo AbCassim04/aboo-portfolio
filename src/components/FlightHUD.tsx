@@ -267,14 +267,42 @@ export default function FlightHUD({
         </div>
       )}
 
-      {/* Radar */}
+      {/* Radar — bottom-right on desktop, top-left on mobile */}
       <div style={{
-        position: 'absolute', bottom: '1.5rem', right: '1.5rem',
+        position: 'absolute',
+        ...(isMobile ? { top: '1.5rem', left: '1rem' } : { bottom: '1.5rem', right: '1.5rem' }),
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.3rem',
       }}>
         <canvas ref={radarRef} width={RADAR_SIZE} height={RADAR_SIZE}
           style={{ display: 'block', borderRadius: '50%' }} />
         <span style={{ color: 'rgba(215,226,234,0.3)', fontSize: '0.6rem', letterSpacing: '0.1em' }}>NAV</span>
+
+        {/* LIGHT toggle sits directly below the radar on mobile */}
+        {isMobile && onToggleLight && (
+          <button
+            onTouchStart={onToggleLight}
+            style={{
+              marginTop:        '0.3rem',
+              padding:          '0.4rem 1rem',
+              borderRadius:     '999px',
+              background:       lightOn ? 'rgba(255,255,150,0.10)' : 'rgba(255,255,255,0.03)',
+              border:           lightOn
+                                  ? '1px solid rgba(255,255,150,0.5)'
+                                  : '1px solid rgba(215,226,234,0.12)',
+              color:            lightOn ? 'rgba(255,255,150,0.85)' : 'rgba(215,226,234,0.3)',
+              fontSize:         '0.58rem',
+              letterSpacing:    '0.18em',
+              cursor:           'pointer',
+              pointerEvents:    'auto',
+              touchAction:      'none',
+              userSelect:       'none',
+              WebkitUserSelect: 'none' as React.CSSProperties['WebkitUserSelect'],
+              backdropFilter:   'blur(4px)',
+              fontFamily:       'Kanit, sans-serif',
+              fontWeight:       400,
+            }}
+          >LIGHT</button>
+        )}
       </div>
 
       {/* Mobile controls */}
@@ -318,17 +346,15 @@ export default function FlightHUD({
             />
           </div>
 
-          {/* BOOST + LAND — top-left column */}
+          {/* BOOST + LAND — bottom-center, more transparent */}
           <div style={{
-            position:      'absolute',
-            top:           '4.5rem',
-            left:          '1rem',
-            display:       'flex',
-            flexDirection: 'column',
-            gap:           '0.75rem',
-            zIndex:        100,
-            pointerEvents: 'auto',
-            alignItems:    'flex-start',
+            position:  'absolute',
+            bottom:    '1rem',
+            left:      '50%',
+            transform: 'translateX(-50%)',
+            display:   'flex',
+            gap:       '1rem',
+            zIndex:    100,
           }}>
             <button
               onTouchStart={() => {
@@ -339,8 +365,8 @@ export default function FlightHUD({
               }}
               style={{
                 ...btnBase,
-                background:  'rgba(139,92,246,0.18)',
-                borderColor: 'rgba(139,92,246,0.6)',
+                background:  'rgba(139,92,246,0.08)',
+                borderColor: 'rgba(139,92,246,0.3)',
               }}
             >BOOST</button>
             <button
@@ -349,38 +375,11 @@ export default function FlightHUD({
               onTouchCancel={() => { inputRef.current.land = false }}
               style={{
                 ...btnBase,
-                background:  'rgba(34,197,94,0.18)',
-                borderColor: 'rgba(34,197,94,0.6)',
+                background:  'rgba(34,197,94,0.08)',
+                borderColor: 'rgba(34,197,94,0.3)',
                 color:       '#86efac',
               }}
             >LAND</button>
-
-            {/* LIGHT — pill toggle, visually distinct from the nav buttons */}
-            {onToggleLight && (
-              <button
-                onTouchStart={onToggleLight}
-                style={{
-                  marginTop:        '0.25rem',
-                  padding:          '0.45rem 1.1rem',
-                  borderRadius:     '999px',
-                  background:       lightOn ? 'rgba(255,255,150,0.12)' : 'rgba(255,255,255,0.04)',
-                  border:           lightOn
-                                      ? '1px solid rgba(255,255,150,0.55)'
-                                      : '1px solid rgba(215,226,234,0.15)',
-                  color:            lightOn ? 'rgba(255,255,150,0.9)' : 'rgba(215,226,234,0.35)',
-                  fontSize:         '0.58rem',
-                  letterSpacing:    '0.18em',
-                  cursor:           'pointer',
-                  pointerEvents:    'auto',
-                  touchAction:      'none',
-                  userSelect:       'none',
-                  WebkitUserSelect: 'none' as React.CSSProperties['WebkitUserSelect'],
-                  backdropFilter:   'blur(4px)',
-                  fontFamily:       'Kanit, sans-serif',
-                  fontWeight:       400,
-                }}
-              >LIGHT</button>
-            )}
           </div>
         </>
       )}
