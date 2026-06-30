@@ -168,11 +168,15 @@ export class AsteroidField {
   private time:      number = 2
   private isMobile:  boolean
   private scene:     THREE.Scene | null = null
+  private _tempPos:  THREE.Vector3
+  private _zeroCam:  THREE.Vector3
 
   constructor(config: AsteroidFieldConfig, isMobile: boolean) {
     this.config   = config
     this.isMobile = isMobile
     this.dummy    = new THREE.Object3D()
+    this._tempPos  = new THREE.Vector3()
+    this._zeroCam  = new THREE.Vector3()
 
     // ── Textures ──────────────────────────────────────────────────────────
     const base   = typeof import.meta !== 'undefined' ? (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/' : '/'
@@ -334,7 +338,7 @@ export class AsteroidField {
     }
   }
 
-  private orbitalToCartesian(orbit: AsteroidOrbit): THREE.Vector3 {
+  private orbitalToCartesian(orbit: AsteroidOrbit, target: THREE.Vector3): void {
     let E = orbit.meanAnomaly
     for (let i = 0; i < 5; i++) {
       E = E - (E - orbit.eccentricity * Math.sin(E) - orbit.meanAnomaly) /
@@ -354,7 +358,7 @@ export class AsteroidField {
     const cosAN = Math.cos(orbit.longitudeAN)
     const sinAN = Math.sin(orbit.longitudeAN)
 
-    return new THREE.Vector3(
+    target.set(
       r * (cosAN * cosNu - sinAN * sinNu * cosI),
       r * (sinNu * sinI),
       r * (sinAN * cosNu + cosAN * sinNu * cosI),
@@ -372,10 +376,10 @@ export class AsteroidField {
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
 
-    const camPos = cameraPosition ?? new THREE.Vector3()
+    const camPos = cameraPosition ?? this._zeroCam
 
-    const NEAR_SQ = 400  * 400
-    const MID_SQ  = 1500 * 1500
+    const NEAR_SQ = 600  * 600
+    const MID_SQ  = 2000 * 2000
 
     let nearCount = 0
     let midCount  = 0
@@ -391,15 +395,15 @@ export class AsteroidField {
       orbit.meanAnomaly += orbit.speed
       if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2
 
-      const pos = this.orbitalToCartesian(orbit)
+      this.orbitalToCartesian(orbit, this._tempPos)
 
       this.rotations[i].x += 0.0001
       this.rotations[i].y += 0.00015
 
       this.dummy.position.set(
-        this.config.centerX + pos.x,
-        this.config.centerY + pos.y,
-        this.config.centerZ + pos.z,
+        this.config.centerX + this._tempPos.x,
+        this.config.centerY + this._tempPos.y,
+        this.config.centerZ + this._tempPos.z,
       )
       this.dummy.rotation.copy(this.rotations[i])
       this.dummy.scale.setScalar(this.scales[i])

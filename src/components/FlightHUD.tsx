@@ -318,11 +318,17 @@ export default function FlightHUD({
             />
           </div>
 
-          {/* BOOST + LAND */}
+          {/* BOOST + LAND — top-left column */}
           <div style={{
-            position: 'absolute', bottom: '1rem', left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex', gap: '1rem', zIndex: 100,
+            position:      'absolute',
+            top:           '4.5rem',
+            left:          '1rem',
+            display:       'flex',
+            flexDirection: 'column',
+            gap:           '0.75rem',
+            zIndex:        100,
+            pointerEvents: 'auto',
+            alignItems:    'flex-start',
           }}>
             <button
               onTouchStart={() => {
@@ -348,16 +354,30 @@ export default function FlightHUD({
                 color:       '#86efac',
               }}
             >LAND</button>
+
+            {/* LIGHT — pill toggle, visually distinct from the nav buttons */}
             {onToggleLight && (
               <button
                 onTouchStart={onToggleLight}
                 style={{
-                  ...btnBase,
-                  background:    lightOn ? 'rgba(255,255,150,0.4)' : 'rgba(155,79,192,0.25)',
-                  borderColor:   lightOn ? 'rgba(255,255,150,0.8)' : 'rgba(155,79,192,0.5)',
-                  fontSize:      '0.6rem',
-                  letterSpacing: '0.1em',
-                  width:         '64px',
+                  marginTop:        '0.25rem',
+                  padding:          '0.45rem 1.1rem',
+                  borderRadius:     '999px',
+                  background:       lightOn ? 'rgba(255,255,150,0.12)' : 'rgba(255,255,255,0.04)',
+                  border:           lightOn
+                                      ? '1px solid rgba(255,255,150,0.55)'
+                                      : '1px solid rgba(215,226,234,0.15)',
+                  color:            lightOn ? 'rgba(255,255,150,0.9)' : 'rgba(215,226,234,0.35)',
+                  fontSize:         '0.58rem',
+                  letterSpacing:    '0.18em',
+                  cursor:           'pointer',
+                  pointerEvents:    'auto',
+                  touchAction:      'none',
+                  userSelect:       'none',
+                  WebkitUserSelect: 'none' as React.CSSProperties['WebkitUserSelect'],
+                  backdropFilter:   'blur(4px)',
+                  fontFamily:       'Kanit, sans-serif',
+                  fontWeight:       400,
                 }}
               >LIGHT</button>
             )}
