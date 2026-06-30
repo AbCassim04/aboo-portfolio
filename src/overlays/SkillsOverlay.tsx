@@ -51,7 +51,7 @@ export default function SkillsOverlay({ currentZone, isTransitioning, navigateTo
           style={{ position: 'fixed', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
         >
           {/* Back button */}
-          <div className="absolute top-6 left-6 md:top-8 md:left-8">
+          <div className="absolute top-6 left-6 md:top-8 md:left-8" style={{ zIndex: 20, pointerEvents: 'auto' }}>
             <motion.button
               type="button"
               onClick={() => navigateTo('hub')}

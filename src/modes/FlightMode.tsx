@@ -156,6 +156,92 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
   })
 }
 
+function createStarField(isMobile: boolean): { points: THREE.Points; mat: THREE.ShaderMaterial; dispose: () => void } {
+  const count     = isMobile ? 3000 : 8000
+  const positions = new Float32Array(count * 3)
+  const colors    = new Float32Array(count * 3)
+  const sizes     = new Float32Array(count)
+  const phases    = new Float32Array(count)
+  const speeds    = new Float32Array(count)
+
+  for (let i = 0; i < count; i++) {
+    let x: number, y: number, z: number
+    if (Math.random() < 0.6) {
+      const theta = Math.random() * Math.PI * 2
+      const phi   = (Math.random() - 0.5) * 0.6
+      const r     = 9500 + Math.random() * 500
+      x = r * Math.cos(phi) * Math.cos(theta)
+      y = r * Math.sin(phi)
+      z = r * Math.cos(phi) * Math.sin(theta)
+    } else {
+      const theta = Math.random() * Math.PI * 2
+      const phi   = Math.acos(2 * Math.random() - 1)
+      const r     = 9500 + Math.random() * 500
+      x = r * Math.sin(phi) * Math.cos(theta)
+      y = r * Math.cos(phi)
+      z = r * Math.sin(phi) * Math.sin(theta)
+    }
+    positions[i * 3] = x; positions[i * 3 + 1] = y; positions[i * 3 + 2] = z
+
+    const rnd = Math.random()
+    if      (rnd < 0.80) { colors[i*3]=1.0; colors[i*3+1]=1.0;  colors[i*3+2]=1.0  }
+    else if (rnd < 0.90) { colors[i*3]=0.7; colors[i*3+1]=0.8;  colors[i*3+2]=1.0  }
+    else if (rnd < 0.97) { colors[i*3]=1.0; colors[i*3+1]=0.95; colors[i*3+2]=0.7  }
+    else                 { colors[i*3]=1.0; colors[i*3+1]=0.7;  colors[i*3+2]=0.4  }
+
+    const sz = Math.random()
+    sizes[i] = sz < 0.90 ? 1.0 + Math.random() * 1.5 : sz < 0.99 ? 3.0 + Math.random() * 2.0 : 6.0 + Math.random() * 3.0
+
+    phases[i] = Math.random() * Math.PI * 2
+    speeds[i] = 0.5 + Math.random() * 2.5
+  }
+
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors,    3))
+  geo.setAttribute('size',     new THREE.BufferAttribute(sizes,     1))
+  geo.setAttribute('phase',    new THREE.BufferAttribute(phases,    1))
+  geo.setAttribute('speed',    new THREE.BufferAttribute(speeds,    1))
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms:     { time: { value: 0 } },
+    vertexColors: true,
+    transparent:  true,
+    depthWrite:   false,
+    blending:     THREE.AdditiveBlending,
+    vertexShader: `
+      attribute float size;
+      attribute float phase;
+      attribute float speed;
+      uniform   float time;
+      varying   vec3  vColor;
+      varying   float vAlpha;
+      void main() {
+        vColor = color;
+        float twinkle = 0.75 + 0.25 * sin(time * speed + phase);
+        vAlpha = twinkle;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * twinkle * (600.0 / -mvPosition.z);
+        gl_Position  = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3  vColor;
+      varying float vAlpha;
+      void main() {
+        float dist = length(gl_PointCoord - vec2(0.5));
+        if (dist > 0.5) discard;
+        float alpha = smoothstep(0.5, 0.1, dist) * vAlpha;
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `,
+  })
+
+  const points = new THREE.Points(geo, mat)
+  points.frustumCulled = false
+  return { points, mat, dispose: () => { geo.dispose(); mat.dispose() } }
+}
+
 // ── Earth / Moon / ISS constants ──────────────────────────────────────────
 const EARTH_RADIUS       = 10
 const EARTH_POS          = new THREE.Vector3(0, 0, 0)
@@ -729,19 +815,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const milkyMesh = new THREE.Mesh(milkyGeo, milkyMat)
     scene.add(milkyMesh)
 
-    const hippTex  = skyLoader.load(base + 'stars/hipp8.jpg')
-    const hippGeo  = new THREE.SphereGeometry(11000, SKY_SEGS, SKY_SEGS)
-    const hippMat  = new THREE.MeshBasicMaterial({ map: hippTex, side: THREE.BackSide, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false })
-    const hippMesh = new THREE.Mesh(hippGeo, hippMat)
-    if (!isMobile) {
-      scene.add(hippMesh)
-    }
-
-    const tychoTex  = skyLoader.load(base + 'stars/tycho8.jpg')
-    const tychoGeo  = new THREE.SphereGeometry(12000, SKY_SEGS, SKY_SEGS)
-    const tychoMat  = new THREE.MeshBasicMaterial({ map: tychoTex, side: THREE.BackSide, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })
-    const tychoMesh = new THREE.Mesh(tychoGeo, tychoMat)
-    scene.add(tychoMesh)
+    const starField = createStarField(isMobile)
+    scene.add(starField.points)
+    const starClock = new THREE.Clock()
 
     // ── 2. Nebula ─────────────────────────────────────────────────────────
     const nebulaPlanes:     THREE.Mesh[]                = []
@@ -1266,8 +1342,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
       for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003
       milkyMesh.rotation.y += 0.00002
-      if (!isMobile) hippMesh.rotation.y += 0.000015
-      tychoMesh.rotation.y += 0.00001
+      starField.mat.uniforms.time.value = starClock.getElapsedTime()
+      starField.points.rotation.y += 0.000002
 
       nodeGroup.rotation.y += 0.003
       nodeGroup.rotation.x  = Math.sin(t * 0.3) * 0.12
@@ -1503,8 +1579,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       for (const m of destGlowMats) m.dispose()
 
       milkyGeo.dispose();  milkyMat.dispose();  milkyTex.dispose()
-      hippGeo.dispose();   hippMat.dispose();   hippTex.dispose()
-      tychoGeo.dispose();  tychoMat.dispose();  tychoTex.dispose()
+      starField.dispose()
       nebulaBgGeo?.dispose(); nebulaBgMat?.dispose()
       for (const m of nebulaMobileMats) m.dispose()
       nodeGeo.dispose(); lineGeo.dispose(); lineMat.dispose()

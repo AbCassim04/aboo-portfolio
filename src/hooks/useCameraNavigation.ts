@@ -17,11 +17,11 @@ interface CameraConfig {
 }
 
 const ZONE_CAMERAS: Record<Zone, CameraConfig> = {
-  hub:      { position: [0, 30, 80],    lookAt: [0, 8, 0],     fov: 60 },
-  about:    { position: [-18, 50, -12], lookAt: [-6, 22, -4],  fov: 50 },
-  skills:   { position: [18, 50, -12],  lookAt: [6, 22, -4],   fov: 50 },
-  projects: { position: [0, 55, 12],    lookAt: [0, 26, 4],    fov: 50 },
-  contact:  { position: [0, 45, 8],     lookAt: [0, 18, 0],    fov: 50 },
+  hub:      { position: [0, 500, 80],    lookAt: [0, 0, 0],      fov: 75 },
+  about:    { position: [72, 42, -12],   lookAt: [84, 14, -4],   fov: 50 },
+  skills:   { position: [108, 42, -12],  lookAt: [96, 14, -4],   fov: 50 },
+  projects: { position: [90, 45, 12],    lookAt: [90, 16, 4],    fov: 50 },
+  contact:  { position: [90, 39, 8],     lookAt: [90, 12, 0],    fov: 50 },
 }
 
 export function useCameraNavigation() {
