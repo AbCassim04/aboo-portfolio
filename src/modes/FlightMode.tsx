@@ -663,7 +663,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
   const toggleLight = () => {
     lightOnRef.current = !lightOnRef.current
-    if (ufoLightRef.current) ufoLightRef.current.intensity = lightOnRef.current ? 8 : 0
+    if (ufoLightRef.current) ufoLightRef.current.intensity = lightOnRef.current ? 60 : 0
     setLightOn(lightOnRef.current)
   }
 
@@ -988,7 +988,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     ufoGroup.position.copy(ufoStateRef.current.position)
     scene.add(ufoGroup)
 
-    const ufoSpotLight = new THREE.SpotLight(0xffffff, 0, 300, Math.PI / 6, 0.3, 1.5)
+    const ufoSpotLight = new THREE.SpotLight(0xffffff, 0, 600, Math.PI / 5, 0.2, 1.2)
     ufoSpotLight.position.set(0, 0, 0)
     ufoGroup.add(ufoSpotLight)
     const ufoSpotLightTarget = new THREE.Object3D()
@@ -1475,7 +1475,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const handleLightKey = (e: KeyboardEvent) => {
       if (e.code === 'KeyL' && !e.repeat) {
         localLightOn = !localLightOn
-        ufoSpotLight.intensity = localLightOn ? 8 : 0
+        ufoSpotLight.intensity = localLightOn ? 60 : 0
         setLightOn(localLightOn)
         lightOnRef.current = localLightOn
       }

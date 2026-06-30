@@ -140,22 +140,47 @@ const FRAG = /* glsl */`
     float specStr = (1.0 - rough) * 0.3;
     vec3  viewDir = normalize(-vWorldPos);
     vec3  halfDir = normalize(sunDir + viewDir);
-    float spec    = pow(max(dot(perturbedN, halfDir), 0.0), 16.0) * specStr;
+    float spec    = pow(max(dot(perturbedN, halfDir), 0.0), 32.0) * specStr * 3.0;
+    float glint   = pow(max(dot(perturbedN, halfDir), 0.0), 128.0) * 2.0;
 
     // Per-instance colour tint (* 2.0 to restore perceived brightness for the
     // HSL range 0.3-0.6 used when generating tints)
     vec3 tintedCol = col.rgb * vInstanceColor * 2.0;
 
-    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 0.8)) + vec3(spec * 0.5);
+    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 0.8)) + vec3(spec * 0.5) + vec3(glint);
     litCol = max(litCol, tintedCol * 0.4);
     gl_FragColor = vec4(litCol, 1.0);
   }
 `
 
+// ── Far-distance point sprite shaders ────────────────────────────────────────
+const FAR_VERT = /* glsl */`
+  attribute vec3  color;
+  attribute float size;
+  varying   vec3  vColor;
+  void main() {
+    vColor = color;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = size * (400.0 / -mvPosition.z);
+    gl_Position  = projectionMatrix * mvPosition;
+  }
+`
+
+const FAR_FRAG = /* glsl */`
+  varying vec3 vColor;
+  void main() {
+    float dist = length(gl_PointCoord - vec2(0.5));
+    if (dist > 0.5) discard;
+    float alpha = smoothstep(0.5, 0.1, dist);
+    gl_FragColor = vec4(vColor, alpha);
+  }
+`
+
 export class AsteroidField {
-  private meshHigh:  THREE.InstancedMesh
-  private meshMid:   THREE.InstancedMesh
-  private meshLow:   THREE.InstancedMesh
+  private meshHigh:   THREE.InstancedMesh
+  private meshMid:    THREE.InstancedMesh
+  private pointsLow:  THREE.Points
+  private dustPoints: THREE.Points
   private diffTex:   THREE.Texture
   private normalTex: THREE.Texture
   private roughTex:  THREE.Texture
@@ -208,9 +233,8 @@ export class AsteroidField {
     geoHigh.computeVertexNormals()
 
     const geoMid = new THREE.IcosahedronGeometry(1, 2)
-    const geoLow = new THREE.IcosahedronGeometry(1, 1)
 
-    // ── Material ──────────────────────────────────────────────────────────
+    // ── Instanced material (triplanar) ────────────────────────────────────
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         diffuseMap:  { value: this.diffTex },
@@ -226,39 +250,103 @@ export class AsteroidField {
       side: THREE.FrontSide,
     })
 
-    // ── Meshes ────────────────────────────────────────────────────────────
+    // ── InstancedMeshes (high + mid detail) ───────────────────────────────
     this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, count)
     this.meshMid  = new THREE.InstancedMesh(geoMid,  mat, count)
-    this.meshLow  = new THREE.InstancedMesh(geoLow,  mat, count)
 
     this.meshHigh.count = 0
     this.meshMid.count  = 0
-    this.meshLow.count  = 0
 
     this.meshHigh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     this.meshMid.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    this.meshLow.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
 
-    // Pre-set a permanent bounding sphere covering every possible asteroid
-    // position. Three.js (r184) Frustum.intersectsObject() calls
-    // computeBoundingSphere() only when boundingSphere === null, then caches
-    // forever. When nearCount=0 on the first render the lazy path produces
-    // radius=-1, permanently culling meshHigh. Pre-setting avoids that.
+    // Pre-set bounding spheres so frustum culling never permanently rejects
+    // them when nearCount / midCount is 0 on the first render.
     const beltCenter = new THREE.Vector3(config.centerX, config.centerY, config.centerZ)
     const beltRadius = config.outerRadius + config.maxScale * 1.5
     const beltSphere = new THREE.Sphere(beltCenter, beltRadius)
 
     this.meshHigh.boundingSphere = beltSphere.clone()
     this.meshMid.boundingSphere  = beltSphere.clone()
-    this.meshLow.boundingSphere  = beltSphere.clone()
 
-    // Pre-allocate per-instance colour buffers (white = [1,1,1] default).
-    // ShaderMaterial does not support setColorAt(); we bind instanceColor
-    // directly as an InstancedBufferAttribute on each geometry instead.
+    // Per-instance colour buffers for the triplanar shader.
     const colorBuf = new Float32Array(count * 3).fill(1)
     geoHigh.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(colorBuf.slice(), 3))
     geoMid.setAttribute('instanceColor',  new THREE.InstancedBufferAttribute(colorBuf.slice(), 3))
-    geoLow.setAttribute('instanceColor',  new THREE.InstancedBufferAttribute(colorBuf.slice(), 3))
+
+    // ── Far-distance point sprites ────────────────────────────────────────
+    const farGeo       = new THREE.BufferGeometry()
+    const farPositions = new Float32Array(count * 3)
+    const farColors    = new Float32Array(count * 3)
+    const farSizes     = new Float32Array(count)
+
+    farGeo.setAttribute('position', new THREE.BufferAttribute(farPositions, 3))
+    farGeo.setAttribute('color',    new THREE.BufferAttribute(farColors,    3))
+    farGeo.setAttribute('size',     new THREE.BufferAttribute(farSizes,     1))
+
+    const farMat = new THREE.ShaderMaterial({
+      uniforms: {
+        sunDir: { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
+      },
+      vertexShader:   FAR_VERT,
+      fragmentShader: FAR_FRAG,
+      transparent:    true,
+      depthWrite:     false,
+    })
+
+    this.pointsLow = new THREE.Points(farGeo, farMat)
+    this.pointsLow.frustumCulled = false
+    // Explicit bounding sphere avoids the radius=-1 culling bug on first frame.
+    farGeo.boundingSphere = beltSphere.clone()
+
+    // ── Dust haze cloud filling the belt volume ────────────────────────────
+    const dustCount     = isMobile ? 400 : 1500
+    const dustGeo       = new THREE.BufferGeometry()
+    const dustPositions = new Float32Array(dustCount * 3)
+
+    for (let i = 0; i < dustCount; i++) {
+      const angle  = rand() * Math.PI * 2
+      const radius = config.innerRadius + rand() * (config.outerRadius - config.innerRadius)
+      const y      = (rand() - 0.5) * config.height * 1.5
+      dustPositions[i * 3]     = config.centerX + Math.cos(angle) * radius
+      dustPositions[i * 3 + 1] = config.centerY + y
+      dustPositions[i * 3 + 2] = config.centerZ + Math.sin(angle) * radius
+    }
+
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3))
+
+    const dustMat = new THREE.ShaderMaterial({
+      uniforms: {
+        color: { value: new THREE.Color(0xaaaa99) },
+      },
+      vertexShader: `
+        void main() {
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = 8.0 * (300.0 / -mvPosition.z);
+          gl_Position  = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 color;
+        void main() {
+          float dist = length(gl_PointCoord - vec2(0.5));
+          if (dist > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.0, dist) * 0.1;
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite:  false,
+      depthTest:   true,
+      blending:    THREE.AdditiveBlending,
+    })
+
+    this.dustPoints = new THREE.Points(dustGeo, dustMat)
+    this.dustPoints.frustumCulled = false
+    dustGeo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(config.centerX, config.centerY, config.centerZ),
+      config.outerRadius + 50,
+    )
 
     // ── Placement ─────────────────────────────────────────────────────────
     this.orbits    = []
@@ -367,14 +455,17 @@ export class AsteroidField {
 
   addToScene(scene: THREE.Scene): void {
     this.scene = scene
+    scene.add(this.dustPoints)   // behind asteroids
     scene.add(this.meshHigh)
     scene.add(this.meshMid)
-    scene.add(this.meshLow)
+    scene.add(this.pointsLow)
   }
 
   update(cameraPosition?: THREE.Vector3): void {
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
+
+    this.dustPoints.rotation.y += 0.00001
 
     const camPos = cameraPosition ?? this._zeroCam
 
@@ -387,7 +478,9 @@ export class AsteroidField {
 
     const highColors = this.meshHigh.geometry.getAttribute('instanceColor') as THREE.InstancedBufferAttribute
     const midColors  = this.meshMid.geometry.getAttribute('instanceColor')  as THREE.InstancedBufferAttribute
-    const lowColors  = this.meshLow.geometry.getAttribute('instanceColor')  as THREE.InstancedBufferAttribute
+    const farPosAttr  = this.pointsLow.geometry.attributes.position as THREE.BufferAttribute
+    const farColAttr  = this.pointsLow.geometry.attributes.color    as THREE.BufferAttribute
+    const farSizeAttr = this.pointsLow.geometry.attributes.size     as THREE.BufferAttribute
 
     for (let i = 0; i < this.orbits.length; i++) {
       const orbit = this.orbits[i]
@@ -419,34 +512,42 @@ export class AsteroidField {
         midColors.setXYZ(midCount, c.r, c.g, c.b)
         this.meshMid.setMatrixAt(midCount++, this.dummy.matrix)
       } else {
-        lowColors.setXYZ(farCount, c.r, c.g, c.b)
-        this.meshLow.setMatrixAt(farCount++, this.dummy.matrix)
+        farPosAttr.setXYZ(farCount, this.dummy.position.x, this.dummy.position.y, this.dummy.position.z)
+        farColAttr.setXYZ(farCount, c.r * 1.3, c.g * 1.3, c.b * 1.3)
+        farSizeAttr.setX(farCount, this.scales[i] * 3)
+        farCount++
       }
     }
 
     this.meshHigh.count = nearCount
     this.meshMid.count  = midCount
-    this.meshLow.count  = farCount
 
     this.meshHigh.instanceMatrix.needsUpdate = true
     this.meshMid.instanceMatrix.needsUpdate  = true
-    this.meshLow.instanceMatrix.needsUpdate  = true
 
     highColors.needsUpdate = true
     midColors.needsUpdate  = true
-    lowColors.needsUpdate  = true
+
+    farPosAttr.needsUpdate  = true
+    farColAttr.needsUpdate  = true
+    farSizeAttr.needsUpdate = true
+    this.pointsLow.geometry.setDrawRange(0, farCount)
   }
 
   dispose(): void {
     if (this.scene) {
+      this.scene.remove(this.dustPoints)
       this.scene.remove(this.meshHigh)
       this.scene.remove(this.meshMid)
-      this.scene.remove(this.meshLow)
+      this.scene.remove(this.pointsLow)
     }
+    this.dustPoints.geometry.dispose()
+    ;(this.dustPoints.material as THREE.Material).dispose()
     this.meshHigh.geometry.dispose()
     this.meshMid.geometry.dispose()
-    this.meshLow.geometry.dispose()
+    this.pointsLow.geometry.dispose()
     ;(this.meshHigh.material as THREE.Material).dispose()
+    ;(this.pointsLow.material as THREE.Material).dispose()
     this.diffTex.dispose()
     this.normalTex.dispose()
     this.roughTex.dispose()
