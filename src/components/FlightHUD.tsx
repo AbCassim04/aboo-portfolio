@@ -9,14 +9,16 @@ export interface PlanetDot {
 }
 
 interface FlightHUDProps {
-  speed:         number
-  isBoosting:    boolean
-  nearestPlanet: { name: string; distance: number } | null
-  ufoX:          number
-  ufoY:          number
-  planetDots:    PlanetDot[]
-  onExit:        () => void
-  inputRef:      React.MutableRefObject<FlightInput>
+  speed:          number
+  isBoosting:     boolean
+  nearestPlanet:  { name: string; distance: number } | null
+  ufoX:           number
+  ufoY:           number
+  planetDots:     PlanetDot[]
+  onExit:         () => void
+  inputRef:       React.MutableRefObject<FlightInput>
+  onToggleLight?: () => void
+  lightOn?:       boolean
 }
 
 const RADAR_SIZE  = 120
@@ -24,6 +26,7 @@ const RADAR_SCALE = 56 / 32
 
 export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
+  onToggleLight, lightOn,
 }: FlightHUDProps) {
   const [isMobile]   = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
@@ -254,6 +257,7 @@ export default function FlightHUD({
             ['SHIFT / CTRL', 'ascend / descend'],
             ['SPACE',        'boost'],
             ['F',            'land'],
+            ['L',            'toggle headlight'],
           ] as [string, string][]).map(([key, desc]) => (
             <div key={key} style={{ display: 'flex', gap: '0.75rem', justifyContent: 'space-between', lineHeight: 1.75 }}>
               <span style={{ color: 'rgba(215,226,234,0.8)', fontSize: '0.68rem', fontFamily: 'monospace', minWidth: '5.5rem' }}>{key}</span>
@@ -344,6 +348,19 @@ export default function FlightHUD({
                 color:       '#86efac',
               }}
             >LAND</button>
+            {onToggleLight && (
+              <button
+                onTouchStart={onToggleLight}
+                style={{
+                  ...btnBase,
+                  background:    lightOn ? 'rgba(255,255,150,0.4)' : 'rgba(155,79,192,0.25)',
+                  borderColor:   lightOn ? 'rgba(255,255,150,0.8)' : 'rgba(155,79,192,0.5)',
+                  fontSize:      '0.6rem',
+                  letterSpacing: '0.1em',
+                  width:         '64px',
+                }}
+              >LIGHT</button>
+            )}
           </div>
         </>
       )}

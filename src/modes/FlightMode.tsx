@@ -643,6 +643,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
   const [fps,           setFps]           = useState(0)
   const [loadProgress,  setLoadProgress]  = useState(0)
   const [loadDone,      setLoadDone]      = useState(false)
+  const [lightOn,       setLightOn]       = useState(false)
+  const lightOnRef  = useRef(false)
+  const ufoLightRef = useRef<THREE.SpotLight | null>(null)
 
   type Zone = 'flight' | 'about' | 'skills' | 'projects' | 'contact'
   const [currentZone,    setCurrentZone]    = useState<Zone>('flight')
@@ -656,6 +659,12 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       currentZoneRef.current = zone
       setIsTransitioning(false)
     }, 300)
+  }
+
+  const toggleLight = () => {
+    lightOnRef.current = !lightOnRef.current
+    if (ufoLightRef.current) ufoLightRef.current.intensity = lightOnRef.current ? 8 : 0
+    setLightOn(lightOnRef.current)
   }
 
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
@@ -978,6 +987,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     ufoGroup.position.copy(ufoStateRef.current.position)
     scene.add(ufoGroup)
+
+    const ufoSpotLight = new THREE.SpotLight(0xffffff, 0, 300, Math.PI / 6, 0.3, 1.5)
+    ufoSpotLight.position.set(0, 0, 0)
+    ufoGroup.add(ufoSpotLight)
+    const ufoSpotLightTarget = new THREE.Object3D()
+    ufoSpotLightTarget.position.set(0, 0, -10)
+    ufoGroup.add(ufoSpotLightTarget)
+    ufoSpotLight.target = ufoSpotLightTarget
+    ufoLightRef.current = ufoSpotLight
 
     // ── 10. Particle trail (desktop only) ──────────────────────────────────
     const TRAIL_COUNT = 80
@@ -1453,6 +1471,17 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     animate()
 
+    let localLightOn = false
+    const handleLightKey = (e: KeyboardEvent) => {
+      if (e.code === 'KeyL' && !e.repeat) {
+        localLightOn = !localLightOn
+        ufoSpotLight.intensity = localLightOn ? 8 : 0
+        setLightOn(localLightOn)
+        lightOnRef.current = localLightOn
+      }
+    }
+    window.addEventListener('keydown', handleLightKey)
+
     const onResize = () => {
       const w = container.clientWidth, h = container.clientHeight
       camera.aspect = w / h
@@ -1464,6 +1493,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     return () => {
       cancelAnimationFrame(rafId)
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('keydown', handleLightKey)
 
       for (const g of destAllGeos) g.dispose()
       for (const m of destAllMats) m.dispose()
@@ -1533,6 +1563,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         planetDots={planetDots}
         onExit={onExit}
         inputRef={inputRef}
+        onToggleLight={toggleLight}
+        lightOn={lightOn}
       />
       {nearestIsBlackHole && (
         <div style={{
