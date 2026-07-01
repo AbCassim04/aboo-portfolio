@@ -39,4 +39,4 @@ See [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) for a full deep-dive 
 
 ## License
 
-© 2025 Aboobaker Cassim. See [LICENSE](LICENSE) for details.
+© 2026 Aboobaker Cassim. See [LICENSE](LICENSE) for details.
