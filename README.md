@@ -1,73 +1,42 @@
-# React + TypeScript + Vite
+# aboo-portfolio
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A fully 3D interactive portfolio where visitors pilot a UFO through a photorealistic solar system. Built with React, Three.js, TypeScript, and GLSL shaders.
 
-Currently, two official plugins are available:
+🚀 **[Live Site](https://abcassim04.github.io/aboo-portfolio/)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- **Full solar system** — 8 planets with 8K NASA textures, real axial tilts, and orbital mechanics
+- **Asteroid belt** — 3,000 procedurally generated asteroids with Keplerian orbits, Kirkwood gaps, triplanar rock textures, and a 3-tier LOD system
+- **General-relativistic black hole** — GLSL raytracer implementing Schwarzschild geodesics with accretion disk, Doppler shift, gravitational lensing, bloom, and TAA
+- **GLB models** — ISS, JWST, and a floating astronaut orbiting Earth
+- **Procedural star field** — 8,000 independently twinkling stars with color variation and Milky Way density band
+- **Mobile support** — dual virtual joystick controls, adaptive LOD, touch-optimised HUD
+- **Super speed boost** — toggle with Space / BOOST button for fast solar system traversal
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Stack
 
-## Expanding the ESLint configuration
+| Layer | Technology |
+|-------|-----------|
+| 3D Engine | Three.js r184 |
+| Framework | React 19 + TypeScript |
+| Build | Vite 8 |
+| Shaders | GLSL (custom raytracer + triplanar mapping) |
+| Deployment | GitHub Pages |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Running locally
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+git clone https://github.com/AbCassim04/aboo-portfolio.git
+cd aboo-portfolio
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Architecture
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+See [`docs/TECHNICAL_REPORT.md`](docs/TECHNICAL_REPORT.md) for a full deep-dive into the rendering systems, physics simulations, and engineering decisions.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## License
+
+© 2025 Aboobaker Cassim. See [LICENSE](LICENSE) for details.
