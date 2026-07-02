@@ -141,14 +141,14 @@ const FRAG = /* glsl */`
     vec3  viewDir = normalize(-vWorldPos);
     vec3  halfDir = normalize(sunDir + viewDir);
     float spec    = pow(max(dot(perturbedN, halfDir), 0.0), 32.0) * specStr * 3.0;
-    float glint   = pow(max(dot(perturbedN, halfDir), 0.0), 128.0) * 2.0;
+    float glint   = pow(max(dot(perturbedN, halfDir), 0.0), 64.0) * 3.0;
 
     // Per-instance colour tint (* 2.0 to restore perceived brightness for the
     // HSL range 0.3-0.6 used when generating tints)
     vec3 tintedCol = col.rgb * vInstanceColor * 2.0;
 
-    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 0.8)) + vec3(spec * 0.5) + vec3(glint);
-    litCol = max(litCol, tintedCol * 0.4);
+    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 1.2)) + vec3(spec * 0.8) + vec3(glint);
+    litCol = max(litCol, tintedCol * 0.5);
     gl_FragColor = vec4(litCol, 1.0);
   }
 `
@@ -331,7 +331,7 @@ export class AsteroidField {
         void main() {
           float dist = length(gl_PointCoord - vec2(0.5));
           if (dist > 0.5) discard;
-          float alpha = smoothstep(0.5, 0.0, dist) * 0.1;
+          float alpha = smoothstep(0.5, 0.0, dist) * 0.08;
           gl_FragColor = vec4(color, alpha);
         }
       `,
@@ -376,7 +376,7 @@ export class AsteroidField {
       const gaps = config.kirkwoodGaps ?? []
       let inGap = false
       for (const gapRadius of gaps) {
-        if (Math.abs(radius - gapRadius) < 30) { inGap = true; break }
+        if (Math.abs(radius - gapRadius) < 20) { inGap = true; break }
       }
       if (inGap && rand() > 0.05) continue
 

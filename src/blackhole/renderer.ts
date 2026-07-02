@@ -19,36 +19,6 @@ let _rafId: number | null = null
 let _needsUpdate = true
 let _meshGeo: THREE.BufferGeometry | null = null
 const _prevObserverPos = new THREE.Vector3()
-let _camLogged = false
-
-// ─── Diagnostic stages (set DEBUG_STAGE=0 to disable) ────────────────────────
-// 1=solid-red  2=uv-gradient  3=ray-direction
-let DEBUG_STAGE = 0
-const DEBUG_FRAG: Record<number, string> = {
-  1: 'void main(){gl_FragColor=vec4(1.0,0.0,0.0,1.0);}',
-  2: 'uniform vec2 resolution;void main(){vec2 uv=gl_FragCoord.xy/resolution.xy;gl_FragColor=vec4(uv,0.0,1.0);}',
-  3: [
-    'uniform vec2 resolution;',
-    'uniform vec3 cam_x,cam_y,cam_z;',
-    'void main(){',
-    '  vec2 p=-1.0+2.0*gl_FragCoord.xy/resolution.xy;',
-    '  p.y*=resolution.y/resolution.x;',
-    '  vec3 ray=normalize(p.x*cam_x+p.y*cam_y+1.0*cam_z);',
-    '  gl_FragColor=vec4(ray*0.5+0.5,1.0);',
-    '}',
-  ].join('\n'),
-}
-let _dbgN = 0
-
-function dbgRT(label: string, rt: THREE.WebGLRenderTarget): void {
-  const rdr = _renderer
-  if (!rdr) return
-  const buf = new Uint8Array(4)
-  try {
-    rdr.readRenderTargetPixels(rt, rt.width >> 1, rt.height >> 1, 1, 1, buf)
-    console.log(`[BH:dbg] ${label}: r=${buf[0]} g=${buf[1]} b=${buf[2]} a=${buf[3]}`)
-  } catch (e) { console.warn('[BH:dbg] readRT failed:', label, String(e)) }
-}
 
 // ─── TAA state ────────────────────────────────────────────────────────────────
 let _taaCurrentRT: THREE.WebGLRenderTarget | null = null
@@ -228,12 +198,6 @@ function updateCamera(): void {
   ;(_uniforms['cam_x'].value as THREE.Vector3).set(e[0], e[1], e[2])
   ;(_uniforms['cam_y'].value as THREE.Vector3).set(e[6], e[7], e[8])
   ;(_uniforms['cam_z'].value as THREE.Vector3).set(e[3], e[4], e[5])
-  if (!_camLogged && _uniforms) {
-    _camLogged = true
-    console.log('[BH] cam_x:', (_uniforms['cam_x'].value as THREE.Vector3).toArray())
-    console.log('[BH] cam_y:', (_uniforms['cam_y'].value as THREE.Vector3).toArray())
-    console.log('[BH] cam_z:', (_uniforms['cam_z'].value as THREE.Vector3).toArray())
-  }
 }
 
 // ─── Update all uniforms ──────────────────────────────────────────────────────
@@ -403,21 +367,6 @@ function renderFrame(): void {
   const rdr = _renderer
   const taaEnabled = PARAMS.taa_enabled && !!_taaCurrentRT
 
-  // ── Diagnostic pixel readback (first 3 frames only) ──────────────────────────
-  _dbgN++
-  if (DEBUG_STAGE > 0) {
-    if (_dbgN <= 3) console.log(`[BH:dbg] renderFrame #${_dbgN} taaEnabled=${taaEnabled}`)
-
-    if (_dbgN === 1 && _scene && _ppCamera) {
-      // Render scene to 8×8 RT — completely isolated from bloom/TAA/screen
-      const tiny = new THREE.WebGLRenderTarget(8, 8, { format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter })
-      const scn = _scene; const cam = _ppCamera
-      rdr.setRenderTarget(tiny); rdr.clear(); rdr.render(scn, cam); rdr.setRenderTarget(null)
-      dbgRT('[A] scene-only (bypasses bloom+TAA)', tiny)
-      tiny.dispose()
-    }
-  }
-
   if (taaEnabled) {
     const jitter = taaNextJitter()
     ;(_uniforms['taa_jitter'].value as THREE.Vector2).set(jitter.x, jitter.y)
@@ -432,49 +381,10 @@ function renderFrame(): void {
     const delta = _observer ? Math.min(_prevObserverPos.distanceTo(_observer.position) * 0.1, 1.0) : 0.0
     if (_observer) _prevObserverPos.copy(_observer.position)
     renderSceneToTarget(_taaCurrentRT)
-
-    // ── Diagnostic: read pipeline stages after bloom ───────────────────────────
-    if (DEBUG_STAGE > 0 && _dbgN <= 3) {
-      if (_bloomPass) dbgRT('[B] pre-bloom mainRT', _bloomPass.mainRT)
-      dbgRT('[C] post-bloom taaCurrentRT', _taaCurrentRT)
-    }
-
     renderTAA(rdr, _taaCurrentRT, delta)
-
-    // ── Diagnostic: read post-TAA output (ping-pong: history = last frame on screen)
-    if (DEBUG_STAGE > 0 && _dbgN <= 3 && _taaHistoryRT) {
-      dbgRT('[D] post-TAA taaHistoryRT (= screen output)', _taaHistoryRT)
-    }
-    // ── Always: one-shot readback on frame 1 for the full shader path ────────────
-    if (_dbgN === 1 && _bloomPass && _taaHistoryRT) {
-      dbgRT('[full] pre-bloom mainRT center', _bloomPass.mainRT)
-      dbgRT('[full] post-TAA screen center', _taaHistoryRT)
-    }
   } else {
     renderSceneToTarget(null)
     if (_taaHistoryValid) resetTAA()
-
-    // ── Diagnostic: non-TAA path — read bloom mainRT only ─────────────────────
-    if (DEBUG_STAGE > 0 && _dbgN <= 3 && _bloomPass) {
-      dbgRT('[B-nontaa] pre-bloom mainRT', _bloomPass.mainRT)
-    }
-    if (_dbgN === 1 && _bloomPass) {
-      const rt = _bloomPass.mainRT
-      const rdr2 = _renderer!
-      const positions = [
-        ['center',    rt.width >> 1,          rt.height >> 1],
-        ['top-mid',   rt.width >> 1,          rt.height - 4],
-        ['right-mid', rt.width - 4,           rt.height >> 1],
-        ['bottom-mid',rt.width >> 1,          4],
-        ['left-mid',  4,                       rt.height >> 1],
-        ['top-right', rt.width - 4,           rt.height - 4],
-      ] as const
-      for (const [label, x, y] of positions) {
-        const b = new Uint8Array(4)
-        try { rdr2.readRenderTargetPixels(rt, x, y, 1, 1, b) } catch(_) {}
-        console.log(`[full-nontaa] mainRT ${label} (${x},${y}): r=${b[0]} g=${b[1]} b=${b[2]} a=${b[3]}`)
-      }
-    }
   }
 }
 
@@ -610,17 +520,6 @@ export function init(canvas: HTMLCanvasElement, onReady: () => void): void {
     })
     const mesh = new THREE.Mesh(_meshGeo, _material)
     _scene.add(mesh)
-
-    // Stage diagnostic: log GLSL source, optionally override fragment shader
-    if (DEBUG_STAGE > 0) {
-      console.log('[BH:dbg] GLSL source head (300 chars):\n', fragShader.slice(0, 300))
-      const ovrd = DEBUG_FRAG[DEBUG_STAGE]
-      if (ovrd) {
-        _material.fragmentShader = ovrd
-        _material.needsUpdate = true
-        console.log('[BH:dbg] Stage', DEBUG_STAGE, 'fragment shader override applied')
-      }
-    }
 
     // Initial camera orientation
     updateCamera()
