@@ -127,7 +127,8 @@ const FRAG = /* glsl */`
       zNrm * blend.z
     );
 
-    vec3 perturbedN = normalize(n + nrm * 0.6);
+    // Stronger normal influence so surface detail reads as bumpy rock, not flat.
+    vec3 perturbedN = normalize(n + nrm * 1.15);
 
     // Triplanar roughness
     float xRgh = texture2D(roughMap, p.yz).r;
@@ -137,17 +138,22 @@ const FRAG = /* glsl */`
 
     // Diffuse + specular lighting
     float diff    = max(dot(perturbedN, sunDir), 0.0) * 1.5;
-    float specStr = (1.0 - rough) * 0.3;
+    float specStr = (1.0 - rough) * 0.5;
     vec3  viewDir = normalize(-vWorldPos);
     vec3  halfDir = normalize(sunDir + viewDir);
-    float spec    = pow(max(dot(perturbedN, halfDir), 0.0), 32.0) * specStr * 3.0;
+    // Broader, stronger sun highlight so rocks visibly glint at the right angle.
+    float spec    = pow(max(dot(perturbedN, halfDir), 0.0), 24.0) * specStr * 4.0;
     float glint   = pow(max(dot(perturbedN, halfDir), 0.0), 64.0) * 3.0;
 
-    // Per-instance colour tint (* 2.0 to restore perceived brightness for the
-    // HSL range 0.3-0.6 used when generating tints)
-    vec3 tintedCol = col.rgb * vInstanceColor * 2.0;
+    // Ambient-occlusion approximation: down/side-facing normals (crevices) are
+    // darkened, up-facing surfaces stay bright.
+    float ao = 0.45 + 0.55 * (perturbedN.y * 0.5 + 0.5);
 
-    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 1.2)) + vec3(spec * 0.8) + vec3(glint);
+    // Per-instance colour tint (* 2.0 to restore perceived brightness for the
+    // HSL range used when generating tints), modulated by the AO term.
+    vec3 tintedCol = col.rgb * vInstanceColor * 2.0 * ao;
+
+    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 1.2)) + vec3(spec) + vec3(glint);
     litCol = max(litCol, tintedCol * 0.5);
     gl_FragColor = vec4(litCol, 1.0);
   }
@@ -161,7 +167,8 @@ const FAR_VERT = /* glsl */`
   void main() {
     vColor = color;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = size * (400.0 / -mvPosition.z);
+    // Larger base size so the belt reads as a distinct ring from far away.
+    gl_PointSize = size * (620.0 / -mvPosition.z);
     gl_Position  = projectionMatrix * mvPosition;
   }
 `
@@ -171,8 +178,42 @@ const FAR_FRAG = /* glsl */`
   void main() {
     float dist = length(gl_PointCoord - vec2(0.5));
     if (dist > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.1, dist);
-    gl_FragColor = vec4(vColor, alpha);
+    // Bright core + soft additive glow halo so the sprites catch light
+    // and stand out as a golden/amber ring against black space.
+    float core = smoothstep(0.5, 0.18, dist);
+    float glow = smoothstep(0.5, 0.0,  dist) * 0.55;
+    gl_FragColor = vec4(vColor, core + glow);
+  }
+`
+
+// ── Volumetric haze ring ─────────────────────────────────────────────────────
+// A large flat annulus with additive blending sitting in the belt plane. It is
+// extremely faint — it just gives the belt a visible presence from outside
+// before individual asteroids resolve.
+const HAZE_VERT = /* glsl */`
+  uniform float uInner;
+  uniform float uOuter;
+  varying float vR;
+  void main() {
+    // RingGeometry is authored in the XY plane; length(position.xy) is radial.
+    // The flat orientation is applied via mesh.rotation (not baked), so this
+    // stays valid.
+    float r = length(position.xy);
+    vR = (r - uInner) / (uOuter - uInner);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+
+const HAZE_FRAG = /* glsl */`
+  uniform vec3  uColor;
+  uniform float uOpacity;
+  varying float vR;
+  void main() {
+    // Soft bump peaking at the middle of the belt, fading at both edges.
+    // Extra 0.5 multiplier keeps the scattered-dust look barely-there rather
+    // than a solid colored disc.
+    float edge = smoothstep(0.0, 0.3, vR) * smoothstep(1.0, 0.7, vR);
+    gl_FragColor = vec4(uColor, edge * uOpacity * 0.5);
   }
 `
 
@@ -181,6 +222,7 @@ export class AsteroidField {
   private meshMid:    THREE.InstancedMesh
   private pointsLow:  THREE.Points
   private dustPoints: THREE.Points
+  private hazeRing:   THREE.Mesh
   private diffTex:   THREE.Texture
   private normalTex: THREE.Texture
   private roughTex:  THREE.Texture
@@ -241,7 +283,7 @@ export class AsteroidField {
         normalMap:   { value: this.normalTex },
         roughMap:    { value: this.roughTex },
         sharpness:   { value: 4.0 },
-        scale:       { value: 0.4 },
+        scale:       { value: 0.55 },
         sunDir:      { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
         ambientCol:  { value: new THREE.Color(0x888899) },
       },
@@ -348,6 +390,34 @@ export class AsteroidField {
       config.outerRadius + 50,
     )
 
+    // ── Volumetric haze ring ───────────────────────────────────────────────
+    // Flat additive annulus that gives the belt a faint glowing presence from
+    // far away. Orientation is applied via mesh.rotation (not baked into the
+    // geometry) so the vertex shader's length(position.xy) stays radial.
+    const hazeGeo = new THREE.RingGeometry(
+      config.innerRadius - 60,
+      config.outerRadius + 120,
+      128,
+    )
+    const hazeMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uInner:   { value: config.innerRadius },
+        uOuter:   { value: config.outerRadius },
+        uColor:   { value: new THREE.Color(0xd4b896) }, // desaturated warm grey-gold
+        uOpacity: { value: 0.018 },
+      },
+      vertexShader:   HAZE_VERT,
+      fragmentShader: HAZE_FRAG,
+      transparent:    true,
+      depthWrite:     false,
+      side:           THREE.DoubleSide,
+      blending:       THREE.AdditiveBlending,
+    })
+    this.hazeRing = new THREE.Mesh(hazeGeo, hazeMat)
+    this.hazeRing.rotation.x = -Math.PI / 2
+    this.hazeRing.position.set(config.centerX, config.centerY, config.centerZ)
+    this.hazeRing.frustumCulled = false
+
     // ── Placement ─────────────────────────────────────────────────────────
     this.orbits    = []
     this.scales    = []
@@ -416,9 +486,9 @@ export class AsteroidField {
 
       const tint = new THREE.Color()
       tint.setHSL(
-        0.06 + rand() * 0.04,   // hue: very subtle warm grey
-        0.05 + rand() * 0.1,    // saturation: very low — almost greyscale
-        0.4  + rand() * 0.3,    // lightness: mid range
+        0.05 + rand() * 0.06,   // hue: warm grey → sandy
+        0.03 + rand() * 0.20,   // saturation: wider — some near-grey, some tinted
+        0.18 + rand() * 0.55,   // lightness: charcoal (dark) → sandy grey (light)
       )
       this.colors.push(tint)
 
@@ -455,6 +525,7 @@ export class AsteroidField {
 
   addToScene(scene: THREE.Scene): void {
     this.scene = scene
+    scene.add(this.hazeRing)     // faint ring glow, furthest back
     scene.add(this.dustPoints)   // behind asteroids
     scene.add(this.meshHigh)
     scene.add(this.meshMid)
@@ -513,8 +584,15 @@ export class AsteroidField {
         this.meshMid.setMatrixAt(midCount++, this.dummy.matrix)
       } else {
         farPosAttr.setXYZ(farCount, this.dummy.position.x, this.dummy.position.y, this.dummy.position.z)
-        farColAttr.setXYZ(farCount, c.r * 1.3, c.g * 1.3, c.b * 1.3)
-        farSizeAttr.setX(farCount, this.scales[i] * 3)
+        // Warmer + brighter than the base tint so the belt reads as a distinct
+        // golden/amber ring from a distance.
+        farColAttr.setXYZ(
+          farCount,
+          c.r * 1.7 + 0.25,
+          c.g * 1.35 + 0.14,
+          c.b * 0.95 + 0.03,
+        )
+        farSizeAttr.setX(farCount, this.scales[i] * 4.5)
         farCount++
       }
     }
@@ -536,11 +614,14 @@ export class AsteroidField {
 
   dispose(): void {
     if (this.scene) {
+      this.scene.remove(this.hazeRing)
       this.scene.remove(this.dustPoints)
       this.scene.remove(this.meshHigh)
       this.scene.remove(this.meshMid)
       this.scene.remove(this.pointsLow)
     }
+    this.hazeRing.geometry.dispose()
+    ;(this.hazeRing.material as THREE.Material).dispose()
     this.dustPoints.geometry.dispose()
     ;(this.dustPoints.material as THREE.Material).dispose()
     this.meshHigh.geometry.dispose()

@@ -25,3 +25,20 @@ body,
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Interactive planet labels in flight mode — subtle pulsing violet border */
+@keyframes planetLabelPulse {
+  0%, 100% {
+    border-color: rgba(139, 92, 246, 0.45);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.25);
+  }
+  50% {
+    border-color: rgba(167, 139, 250, 0.9);
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.6);
+  }
+}
+
+.planet-label-chip {
+  animation: planetLabelPulse 2.2s ease-in-out infinite;
+}
+

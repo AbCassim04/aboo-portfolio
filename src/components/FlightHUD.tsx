@@ -8,6 +8,11 @@ export interface PlanetDot {
   name: string; x: number; y: number; color: string
 }
 
+// Solar-system body plotted on the NAV radar (world X/Y position).
+export interface SolarBody {
+  key: string; abbr: string; name: string; x: number; y: number; color: string; isSun: boolean
+}
+
 interface FlightHUDProps {
   speed:          number
   isBoosting:     boolean
@@ -15,6 +20,8 @@ interface FlightHUDProps {
   ufoX:           number
   ufoY:           number
   planetDots:     PlanetDot[]
+  solarBodies?:   SolarBody[]
+  activeBodyKey?: string | null
   onExit:         () => void
   inputRef:       React.MutableRefObject<FlightInput>
   onToggleLight?: () => void
@@ -25,8 +32,8 @@ const RADAR_SIZE  = 120
 const RADAR_SCALE = 56 / 32
 
 export default function FlightHUD({
-  speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, onExit, inputRef,
-  onToggleLight, lightOn,
+  speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, solarBodies, activeBodyKey,
+  onExit, inputRef, onToggleLight, lightOn,
 }: FlightHUDProps) {
   const [isMobile]   = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
@@ -71,6 +78,37 @@ export default function FlightHUD({
       ctx.fillText(p.name, cx + dx, cy + dy - 7)
     }
 
+    // Solar-system bodies — compressed scale, clamped to the rim so distant
+    // planets still show as directional indicators. The Sun is a larger warm
+    // dot; the body the player is nearest to is highlighted with its full name.
+    if (solarBodies && solarBodies.length) {
+      const PS = 50 / 1600   // ≈ rim at 1600 world units
+      for (const b of solarBodies) {
+        let sx = (b.x - ufoX) * PS
+        let sy = -(b.y - ufoY) * PS
+        const m = Math.hypot(sx, sy)
+        if (m > 50) { sx = (sx / m) * 50; sy = (sy / m) * 50 }
+        const px = cx + sx, py = cy + sy
+        const isActive = b.key === activeBodyKey
+        const r = b.isSun ? 5 : isActive ? 4 : 3
+
+        ctx.beginPath()
+        ctx.arc(px, py, r, 0, Math.PI * 2)
+        ctx.fillStyle = b.isSun ? '#ffcc33' : b.color
+        if (b.isSun || isActive) {
+          ctx.shadowColor = b.isSun ? '#ffcc33' : b.color
+          ctx.shadowBlur  = 6
+        }
+        ctx.fill()
+        ctx.shadowBlur = 0
+
+        ctx.font      = isActive ? 'bold 8px Kanit, Arial, sans-serif' : '7px Kanit, Arial, sans-serif'
+        ctx.fillStyle = isActive ? '#e8ddff' : 'rgba(215,226,234,0.55)'
+        ctx.textAlign = 'center'
+        ctx.fillText(isActive ? b.name : b.abbr, px, py - r - 3)
+      }
+    }
+
     ctx.restore()
 
     ctx.beginPath()
@@ -89,7 +127,7 @@ export default function FlightHUD({
     ctx.strokeStyle = 'rgba(119,33,177,0.8)'
     ctx.lineWidth   = 1.5
     ctx.stroke()
-  }, [ufoX, ufoY, planetDots])
+  }, [ufoX, ufoY, planetDots, solarBodies, activeBodyKey])
 
   // Boost toast polling
   useEffect(() => {

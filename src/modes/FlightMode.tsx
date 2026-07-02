@@ -10,8 +10,12 @@ import {
   createSaturn, createUranus, createNeptune,
 } from '../utils/planetFactories'
 import FlightHUD             from '../components/FlightHUD'
-import type { PlanetDot }    from '../components/FlightHUD'
+import type { PlanetDot, SolarBody } from '../components/FlightHUD'
 import LoadingScreen         from '../components/LoadingScreen'
+import PlanetLabels          from '../components/PlanetLabels'
+import type { PlanetLabelDatum } from '../components/PlanetLabels'
+import PlanetInfoPanel       from '../components/PlanetInfoPanel'
+import { PLANET_DATA }       from '../data/planetData'
 import AboutOverlay          from '../overlays/AboutOverlay'
 import SkillsOverlay         from '../overlays/SkillsOverlay'
 import ProjectsOverlay       from '../overlays/ProjectsOverlay'
@@ -614,6 +618,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
   const lightOnRef  = useRef(false)
   const ufoLightRef = useRef<THREE.SpotLight | null>(null)
 
+  // ── Planet identification system ──────────────────────────────────────────
+  const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null)
+  const [activeBodyKey,  setActiveBodyKey]  = useState<string | null>(null)
+  // Screen-space label positions written every frame by the flight loop.
+  const planetLabelDataRef = useRef<PlanetLabelDatum[]>(
+    PLANET_DATA.map(() => ({ x: 0, y: 0, visible: false })),
+  )
+
   type Zone = 'flight' | 'about' | 'skills' | 'projects' | 'contact'
   const [currentZone,    setCurrentZone]    = useState<Zone>('flight')
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -642,6 +654,20 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       x:     d.pos[0],
       y:     d.pos[1],
       color: '#' + d.color.toString(16).padStart(6, '0'),
+    })),
+    [],
+  )
+
+  // Solar-system bodies for the NAV radar (static world positions).
+  const solarBodies = useMemo<SolarBody[]>(
+    () => PLANET_DATA.map(p => ({
+      key:   p.key,
+      abbr:  p.abbr,
+      name:  p.name,
+      x:     p.position[0],
+      y:     p.position[1],
+      color: p.colorCss,
+      isSun: !!p.isSun,
     })),
     [],
   )
@@ -1088,6 +1114,21 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     sunMesh.position.set(-4000, 0, 0)
     scene.add(sunMesh)
 
+    // ── Planet identification: map each PLANET_DATA key to its live 3D object ──
+    // (positions are read from these objects every frame for labels + detection)
+    const planetObjects: Record<string, THREE.Object3D> = {
+      sun:     sunMesh,
+      mercury: mercuryObj.group,
+      venus:   venusObj.group,
+      earth:   earthObj.group,
+      mars:    marsObj.group,
+      jupiter: jupiterObj.group,
+      saturn:  saturnObj.group,
+      uranus:  uranusObj.group,
+      neptune: neptuneObj.group,
+    }
+    const _projV = new THREE.Vector3()
+
     const SUN_SEGS = isMobile ? 16 : 32
     const coronaGeo = new THREE.SphereGeometry(161, SUN_SEGS, SUN_SEGS)
     const coronaMat = new THREE.MeshBasicMaterial({
@@ -1384,9 +1425,35 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         camera.lookAt(camLookAt)
       }
 
+      // ── Planet labels + detection (every frame for smooth tracking) ──────
+      const cw = container.clientWidth
+      const ch = container.clientHeight
+      let nearestBodyKey:     string | null = null
+      let nearestBodyInRange: boolean       = false
+      let nearestBodyDist:    number        = Infinity
+      for (let i = 0; i < PLANET_DATA.length; i++) {
+        const pd  = PLANET_DATA[i]
+        const obj = planetObjects[pd.key]
+        const ld  = planetLabelDataRef.current[i]
+        if (!obj) { ld.visible = false; continue }
+        const dist = obj.position.distanceTo(ufoPos)
+        if (dist < nearestBodyDist) {
+          nearestBodyDist    = dist
+          nearestBodyKey     = pd.key
+          nearestBodyInRange = dist < pd.detectionRadius
+        }
+        if (dist >= pd.detectionRadius) { ld.visible = false; continue }
+        // Project the planet's world position to screen pixels.
+        _projV.copy(obj.position).project(camera)
+        ld.x       = (_projV.x * 0.5 + 0.5) * cw
+        ld.y       = (-_projV.y * 0.5 + 0.5) * ch
+        ld.visible = _projV.z < 1   // false when the planet is behind the camera
+      }
+
       // ── HUD at ~10 fps ─────────────────────────────────────────────────
       hudFrame++
       if (hudFrame % 6 === 0) {
+        setActiveBodyKey(nearestBodyInRange ? nearestBodyKey : null)
         const vel      = state.velocity.length()
         const topSpeed = inputRef.current.boost ? 3.2 : 0.4
         setSpeed(Math.min(vel / topSpeed, 1))
@@ -1517,11 +1584,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         ufoX={ufoXY.x}
         ufoY={ufoXY.y}
         planetDots={planetDots}
+        solarBodies={solarBodies}
+        activeBodyKey={activeBodyKey}
         onExit={onExit}
         inputRef={inputRef}
         onToggleLight={toggleLight}
         lightOn={lightOn}
       />
+      <PlanetLabels dataRef={planetLabelDataRef} onSelect={setSelectedPlanet} />
+      <PlanetInfoPanel planetKey={selectedPlanet} onClose={() => setSelectedPlanet(null)} />
       {nearestIsBlackHole && (
         <div style={{
           position: 'absolute', top: '1.5rem', left: '50%', transform: 'translateX(-50%)',
