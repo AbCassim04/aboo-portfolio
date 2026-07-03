@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { CameraTransitionState, Zone } from '../hooks/useCameraNavigation'
 import LoadingScreen from './LoadingScreen'
-import { AsteroidField } from '../systems/AsteroidField'
+import { AsteroidField, MAIN_BELT_CONFIG } from '../systems/AsteroidField'
 import {
   createMercury, createVenus, createMars, createJupiter,
   createSaturn, createUranus, createNeptune,
@@ -152,8 +152,10 @@ function createGlowMaterial(color: THREE.Color, intensity = 1.2): THREE.ShaderMa
 
 // ── Earth / Moon ───────────────────────────────────────────────────────────
 
+// Earth sits at the solar-system origin (matching flight mode). The Moon, UFOs
+// and constellation are all positioned relative to this.
 const HUB_EARTH_RADIUS      = 10
-const HUB_EARTH_POS         = new THREE.Vector3(90, 0, 0)
+const HUB_EARTH_POS         = new THREE.Vector3(0, 0, 0)
 const HUB_MOON_RADIUS       = 3
 const HUB_MOON_ORBIT_RADIUS = 30
 const HUB_MOON_ORBIT_SPEED  = 0.003
@@ -405,9 +407,11 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     const scene  = new THREE.Scene()
     const w = container.clientWidth
     const h = container.clientHeight
-    const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000)
-    camera.position.set(0, 500, 80)
-    camera.lookAt(0, 0, 0)
+    // Far plane extended to cover the full solar-system span (Sun at -4000 to
+    // Neptune at +8000) plus the 10 000-radius skybox.
+    const camera = new THREE.PerspectiveCamera(75, w / h, 1, 30000)
+    camera.position.set(2000, 6000, 4000)
+    camera.lookAt(2000, 0, 0)
 
     // ── Renderer ────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
@@ -726,110 +730,107 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
-    // planets in XZ plane at orbital angles around Sun at (0,0,0)
+    // Planets laid out along +X at their true flight-mode positions and sizes:
+    // Sun (far left) → Mercury, Venus, Earth (origin), Mars, belt, Jupiter,
+    // Saturn, Uranus, Neptune. No down-scaling — the factories already produce
+    // flight-mode radii.
     const mercuryObj = createMercury(sharedLoader, isMobile)
-    mercuryObj.group.position.set(30, 0, 18)
-    mercuryObj.group.scale.setScalar(0.4)
+    mercuryObj.group.position.set(-2800, 0, 20)
     scene.add(mercuryObj.group)
 
     const venusObj = createVenus(sharedLoader, isMobile)
-    venusObj.group.position.set(-35, 0, 42)
-    venusObj.group.scale.setScalar(0.3)
+    venusObj.group.position.set(-2000, 0, -30)
     scene.add(venusObj.group)
 
     const marsObj = createMars(sharedLoader, isMobile)
-    marsObj.group.position.set(-113, 0, -65)
-    marsObj.group.scale.setScalar(0.35)
+    marsObj.group.position.set(800, 0, 20)
     scene.add(marsObj.group)
 
     const jupiterObj = createJupiter(sharedLoader, isMobile)
-    jupiterObj.group.position.set(108, 0, -186)
-    jupiterObj.group.scale.setScalar(0.065)
+    jupiterObj.group.position.set(2500, 0, -40)
     scene.add(jupiterObj.group)
 
     const saturnObj = createSaturn(sharedLoader, isMobile)
-    saturnObj.group.position.set(180, 0, 215)
-    saturnObj.group.scale.setScalar(0.065)
+    saturnObj.group.position.set(4000, 0, 30)
     scene.add(saturnObj.group)
 
     const uranusObj = createUranus(sharedLoader, isMobile)
-    uranusObj.group.position.set(-299, 0, 173)
-    uranusObj.group.scale.setScalar(0.12)
+    uranusObj.group.position.set(6000, 0, -20)
     scene.add(uranusObj.group)
 
     const neptuneObj = createNeptune(sharedLoader, isMobile)
-    neptuneObj.group.position.set(-251, 0, -299)
-    neptuneObj.group.scale.setScalar(0.12)
+    neptuneObj.group.position.set(8000, 0, 10)
     scene.add(neptuneObj.group)
 
-    // ── Orbital rings (flat in XZ plane, one per planet) ─────────────────────
-    const orbitRingGeos: THREE.BufferGeometry[] = []
-    const orbitRingMats: THREE.MeshBasicMaterial[] = []
-    for (const r of [35, 55, 90, 130, 215, 280, 345, 390]) {
-      const geo = new THREE.RingGeometry(r - 0.5, r + 0.5, 128)
-      geo.rotateX(-Math.PI / 2)
-      const mat = new THREE.MeshBasicMaterial({ color: 0x3a4466, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
-      scene.add(new THREE.Mesh(geo, mat))
+    // ── Orbital rings — thin elliptical lines showing each planet's orbit ─────
+    // Centred on the Sun (far left) with a radius equal to the planet's distance
+    // from it, so the rings pass through each planet. Rendered flat in the XZ
+    // orbital plane, subtle grey-white.
+    const SUN_HUB_POS = new THREE.Vector3(-4000, 0, 0)
+    const orbitRadii  = [1200, 2000, 4000, 4800, 6500, 8000, 10000, 12000] // Mercury→Neptune
+    const orbitRingGeos: THREE.BufferGeometry[]   = []
+    const orbitRingMats: THREE.LineBasicMaterial[] = []
+    for (const r of orbitRadii) {
+      const curve = new THREE.EllipseCurve(0, 0, r, r, 0, Math.PI * 2, false, 0)
+      const geo   = new THREE.BufferGeometry().setFromPoints(curve.getPoints(180))
+      geo.rotateX(Math.PI / 2) // XY curve → XZ orbital plane
+      const mat  = new THREE.LineBasicMaterial({ color: 0xbbccd7, transparent: true, opacity: 0.18 })
+      const line = new THREE.LineLoop(geo, mat)
+      line.position.copy(SUN_HUB_POS)
+      scene.add(line)
       orbitRingGeos.push(geo)
       orbitRingMats.push(mat)
     }
 
-    // ── 11. Hub-scale Sun at origin ───────────────────────────────────────────
-    const SUN_POS     = new THREE.Vector3(0, 0, 0)
+    // ── 11. Sun at the far left (flight-mode scale & position) ────────────────
+    const SUN_POS     = new THREE.Vector3(-4000, 0, 0)
     const SUN_SEGS    = isMobile ? 16 : 32
     const sunTex      = sharedLoader.load(base + 'stars/8k_sun.jpg')
-    const sunGeo      = new THREE.SphereGeometry(12, 32, 32)
+    const sunGeo      = new THREE.SphereGeometry(140, 64, 64)
     const sunMat      = new THREE.MeshBasicMaterial({ map: sunTex })
     const sunMesh     = new THREE.Mesh(sunGeo, sunMat)
     sunMesh.position.copy(SUN_POS)
     scene.add(sunMesh)
 
-    const coronaGeo  = new THREE.SphereGeometry(14, SUN_SEGS, SUN_SEGS)
-    const coronaMat  = new THREE.MeshBasicMaterial({ color: 0xff9900, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+    const coronaGeo  = new THREE.SphereGeometry(161, SUN_SEGS, SUN_SEGS)
+    const coronaMat  = new THREE.MeshBasicMaterial({ color: 0xff9900, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
     coronaMesh.position.copy(SUN_POS)
     scene.add(coronaMesh)
 
-    const sunGlowGeo  = new THREE.SphereGeometry(20, SUN_SEGS, SUN_SEGS)
-    const sunGlowMat  = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+    const sunGlowGeo  = new THREE.SphereGeometry(175, SUN_SEGS, SUN_SEGS)
+    const sunGlowMat  = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunGlowMesh = new THREE.Mesh(sunGlowGeo, sunGlowMat)
     sunGlowMesh.position.copy(SUN_POS)
     scene.add(sunGlowMesh)
 
-    const sunBloom1Geo  = new THREE.SphereGeometry(30, SUN_SEGS, SUN_SEGS)
-    const sunBloom1Mat  = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false })
+    const sunBloom1Geo  = new THREE.SphereGeometry(240, SUN_SEGS, SUN_SEGS)
+    const sunBloom1Mat  = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunBloom1Mesh = new THREE.Mesh(sunBloom1Geo, sunBloom1Mat)
     sunBloom1Mesh.position.copy(SUN_POS)
     scene.add(sunBloom1Mesh)
 
-    const sunBloom2Geo  = new THREE.SphereGeometry(48, SUN_SEGS, SUN_SEGS)
-    const sunBloom2Mat  = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false })
+    const sunBloom2Geo  = new THREE.SphereGeometry(350, SUN_SEGS, SUN_SEGS)
+    const sunBloom2Mat  = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide })
     const sunBloom2Mesh = new THREE.Mesh(sunBloom2Geo, sunBloom2Mat)
     sunBloom2Mesh.position.copy(SUN_POS)
     scene.add(sunBloom2Mesh)
 
+    // Directional sunlight streaming from the Sun (left) across the planets.
     const sunLight = new THREE.DirectionalLight(0xfff5e0, 3.5)
-    sunLight.position.set(0, 20, 0)
-    sunLight.target.position.set(90, 0, 0)
+    sunLight.position.set(-4000, 800, 0)
+    sunLight.target.position.set(2000, 0, 0)
     scene.add(sunLight)
     scene.add(sunLight.target)
 
-    // ── 12. Asteroid belt (between Mars r=130 and Jupiter r=215) ────────────
+    // ── 12. Asteroid belt (flight-mode belt, reduced count for the hub) ──────
+    // Same dimensions as flight mode (centred on the origin, between Mars and
+    // Jupiter along +X) but far fewer asteroids — the hub only needs a visual
+    // representation, not the full 3000.
     const hubBelt = new AsteroidField({
-      innerRadius:   148,
-      outerRadius:   200,
-      count:         300,
-      countMobile:   80,
-      height:        10,
-      minScale:      0.3,
-      maxScale:      2.5,
-      seed:          77,
-      centerX:       0,
-      centerY:       0,
-      centerZ:       0,
-      color:         0x8a7a6a,
-      rotationSpeed: 0.00003,
-      inclination:   0.05,
+      ...MAIN_BELT_CONFIG,
+      count:       500,
+      countMobile: 100,
     }, isMobile)
     hubBelt.addToScene(scene)
 
@@ -890,8 +891,9 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
           onCompleteRef.current()
         }
       } else if (currentZoneRef.current === 'hub') {
-        camera.position.set(0, 500, 80)
-        camera.lookAt(0, 0, 0)
+        // Static solar-system overview — no animation.
+        camera.position.set(2000, 6000, 4000)
+        camera.lookAt(2000, 0, 0)
       } else {
         const base = camState.to.position
         camera.position.set(base[0], base[1] + Math.sin(t * 0.5) * 0.1, base[2])

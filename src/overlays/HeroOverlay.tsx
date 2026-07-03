@@ -47,12 +47,6 @@ export default function HeroOverlay({ currentZone, isTransitioning, navigateTo, 
             </nav>
           </FadeIn>
 
-          <FadeIn delay={0.15} y={40} className="overflow-hidden pl-2 sm:pl-0">
-            <h1 className="hero-heading font-black uppercase tracking-tight leading-none whitespace-nowrap w-full text-[14vw] sm:text-[15vw] md:text-[16vw] lg:text-[17.5vw] mt-6 sm:mt-4 md:-mt-5">
-              Hi, i&apos;m aboo
-            </h1>
-          </FadeIn>
-
           <div className="mt-auto flex justify-between items-end pb-7 sm:pb-8 md:pb-10 px-6 md:px-10">
             <FadeIn delay={0.35} y={20}>
               <p

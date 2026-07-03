@@ -17,7 +17,10 @@ interface CameraConfig {
 }
 
 const ZONE_CAMERAS: Record<Zone, CameraConfig> = {
-  hub:      { position: [0, 500, 80],    lookAt: [0, 0, 0],      fov: 75 },
+  // Static overview of the whole solar system: high above and angled back so the
+  // orbital plane is visible, centred on the system's midpoint (x≈2000, between
+  // the Sun at -4000 and Neptune at +8000 — matching flight mode).
+  hub:      { position: [2000, 6000, 4000], lookAt: [2000, 0, 0], fov: 75 },
   about:    { position: [72, 42, -12],   lookAt: [84, 14, -4],   fov: 50 },
   skills:   { position: [108, 42, -12],  lookAt: [96, 14, -4],   fov: 50 },
   projects: { position: [90, 45, 12],    lookAt: [90, 16, 4],    fov: 50 },
