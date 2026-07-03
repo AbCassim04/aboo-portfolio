@@ -9,10 +9,9 @@ interface AboutOverlayProps {
 }
 
 const SENTENCES = [
-  'Third-year Computer Science and Mathematics student at Wits University.',
-  'I build full-stack products, conduct AI safety research, and apply deep mathematical thinking to real engineering problems.',
-  'Currently exploring machine learning and mechanistic interpretability.',
-  "Let's build something that matters.",
+  'I believe technology and mathematics, when applied with intention, can genuinely change the world.',
+  'Driven by a deep love for Computer Science and Mathematics — and a desire to use them for something that matters.',
+  'Always building. Always learning. Always with purpose.',
 ]
 
 export default function AboutOverlay({ currentZone, isTransitioning, navigateTo }: AboutOverlayProps) {
