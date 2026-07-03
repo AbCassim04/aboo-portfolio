@@ -90,7 +90,7 @@ export default function HeroOverlay({ currentZone, isTransitioning, navigateTo, 
 
             <FadeIn delay={0.5} y={20}>
               <Magnet padding={80} strength={4}>
-                <a href="mailto:aboobakercassim@gmail.com" target="_blank" rel="noopener noreferrer">
+                <a href="mailto:cassimaboo3@gmail.com" target="_blank" rel="noopener noreferrer">
                   <ContactButton />
                 </a>
               </Magnet>

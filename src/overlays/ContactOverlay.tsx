@@ -11,7 +11,7 @@ interface ContactOverlayProps {
 const LINKS = [
   { label: 'GitHub',   href: 'https://github.com/AbCassim04',            Icon: Code2        },
   { label: 'LinkedIn', href: 'https://linkedin.com/in/aboobaker-cassim', Icon: ExternalLink },
-  { label: 'Email',    href: 'mailto:aboobakercassim@gmail.com',         Icon: Mail         },
+  { label: 'Email',    href: 'mailto:cassimaboo3@gmail.com',             Icon: Mail         },
 ]
 
 export default function ContactOverlay({ currentZone, isTransitioning, navigateTo }: ContactOverlayProps) {
