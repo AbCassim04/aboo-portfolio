@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { CameraTransitionState, Zone } from '../hooks/useCameraNavigation'
-import LoadingScreen from './LoadingScreen'
 import { AsteroidField, MAIN_BELT_CONFIG } from '../systems/AsteroidField'
 import {
   createMercury, createVenus, createMars, createJupiter,
@@ -1059,7 +1058,32 @@ export default function SpaceCanvas({ cameraStateRef, currentZone, onTransitionC
         ref={containerRef}
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100vh', zIndex: 0 }}
       />
-      <LoadingScreen progress={loadProgress} done={loadDone} />
+      {/* Minimal hub loader — the cinematic mission-briefing screen is reserved
+          for flight mode so the homepage stays fast. */}
+      <div
+        style={{
+          position:       'fixed',
+          inset:          0,
+          zIndex:         50,
+          background:     '#060410',
+          display:        'flex',
+          flexDirection:  'column',
+          alignItems:     'center',
+          justifyContent: 'center',
+          gap:            '1rem',
+          opacity:        loadDone ? 0 : 1,
+          pointerEvents:  loadDone ? 'none' : 'auto',
+          transition:     'opacity 0.6s ease',
+          fontFamily:     'Kanit, sans-serif',
+        }}
+      >
+        <span style={{ color: 'rgba(196,181,253,0.6)', fontSize: '0.7rem', letterSpacing: '0.35em', textTransform: 'uppercase' }}>
+          Loading
+        </span>
+        <div style={{ width: 220, height: 2, background: 'rgba(196,181,253,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${loadProgress}%`, background: 'linear-gradient(90deg, #6d28d9, #a78bfa)', transition: 'width 0.3s ease' }} />
+        </div>
+      </div>
     </>
   )
 }

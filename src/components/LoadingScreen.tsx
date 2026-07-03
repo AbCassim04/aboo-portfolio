@@ -1,296 +1,285 @@
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
 
 interface LoadingScreenProps {
-  progress: number   // 0–100
-  done:     boolean
+  progress:    number   // 0 to 1, driven by THREE.LoadingManager
+  onComplete?: () => void
 }
 
-// Stable star field — generated once at module level
-const STARS = Array.from({ length: 90 }, (_, i) => ({
-  id:       i,
-  x:        Math.random() * 100,
-  y:        Math.random() * 100,
-  size:     Math.random() * 1.4 + 0.4,
-  delay:    Math.random() * 4,
-  duration: Math.random() * 2 + 1.8,
-  opacity:  Math.random() * 0.5 + 0.1,
-}))
+// ── Mission-briefing script ─────────────────────────────────────────────────
+const LINES = [
+  'ESTABLISHING ORBITAL COORDINATES...',
+  'CALIBRATING GRAVITATIONAL SENSORS...',
+  'SCANNING ASTEROID FIELDS...',
+  'LOADING SOLAR CARTOGRAPHY...',
+  'DETECTING CELESTIAL BODIES...',
+  'WARMING UP WARP DRIVE...',
+  'ALL SYSTEMS GO — INITIATING LAUNCH SEQUENCE',
+]
+// Per-line beep frequency (Hz)
+const FREQS = [440, 523, 587, 659, 698, 784, 880]
+// Loading-progress each line waits for before it starts typing.
+// Lines 1-2 → 0-30%, 3-4 → 30-60%, 5-6 → 60-90%, line 7 → 100%.
+const THRESHOLDS = [0, 0.15, 0.30, 0.45, 0.60, 0.75, 1.0]
 
-export default function LoadingScreen({ progress, done }: LoadingScreenProps) {
-  const pct = Math.round(progress)
+const CHAR_MS = 40   // typewriter speed
+const GAP_MS  = 400  // pause between lines
+
+interface Star { x: number; y: number; size: number; dur: number; delay: number }
+function makeStars(count: number): Star[] {
+  return Array.from({ length: count }, () => ({
+    x:     Math.random() * 100,
+    y:     Math.random() * 100,
+    size:  Math.random() * 1.6 + 0.6,
+    dur:   Math.random() * 2.5 + 1.5,
+    delay: Math.random() * 3,
+  }))
+}
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+export default function LoadingScreen({ progress, onComplete }: LoadingScreenProps) {
+  const [isMobile]      = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
+  const [stars]         = useState(() => makeStars(isMobile ? 20 : 50))
+  const [typedCounts, setTypedCounts] = useState<number[]>(() => LINES.map(() => 0))
+  const [activeLine,  setActiveLine]  = useState(-1)
+  const [lineDone,    setLineDone]     = useState(false)
+  const [flash,       setFlash]        = useState(false)
+  const [fadeOut,     setFadeOut]      = useState(false)
+
+  // Latest values read by the async boot sequence without re-triggering it.
+  const progressRef   = useRef(progress)
+  const onCompleteRef = useRef(onComplete)
+  useEffect(() => { progressRef.current   = progress   }, [progress])
+  useEffect(() => { onCompleteRef.current = onComplete }, [onComplete])
+
+  useEffect(() => {
+    let cancelled = false
+
+    // ── Web Audio (best-effort — needs a prior user gesture; wrapped so a
+    //    blocked AudioContext never breaks the loading screen) ──────────────
+    let audioCtx: AudioContext | null = null
+    let humGain:  GainNode | null     = null
+    try {
+      const AC = window.AudioContext
+        || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (AC) {
+        audioCtx = new AC()
+        void audioCtx.resume?.()
+        // Continuous low 40 Hz hum, very quiet.
+        const humOsc = audioCtx.createOscillator()
+        humGain = audioCtx.createGain()
+        humOsc.type = 'sine'
+        humOsc.frequency.value = 40
+        humGain.gain.setValueAtTime(0.02, audioCtx.currentTime)
+        humOsc.connect(humGain)
+        humGain.connect(audioCtx.destination)
+        humOsc.start()
+      }
+    } catch {
+      audioCtx = null
+    }
+
+    const playBeep = (frequency: number, duration: number) => {
+      if (!audioCtx) return
+      try {
+        const osc  = audioCtx.createOscillator()
+        const gain = audioCtx.createGain()
+        osc.connect(gain)
+        gain.connect(audioCtx.destination)
+        osc.frequency.value = frequency
+        osc.type = 'sine'
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime)
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration)
+        osc.start(audioCtx.currentTime)
+        osc.stop(audioCtx.currentTime + duration)
+      } catch { /* ignore */ }
+    }
+
+    // Resolve once loading progress reaches a line's threshold.
+    const waitForProgress = (threshold: number) => new Promise<void>(resolve => {
+      const check = () => {
+        if (cancelled || progressRef.current >= threshold - 1e-6) resolve()
+        else setTimeout(check, 60)
+      }
+      check()
+    })
+
+    // Type one line character-by-character.
+    const typeLine = (i: number) => new Promise<void>(resolve => {
+      const len = LINES[i].length
+      let ch = 0
+      const step = () => {
+        if (cancelled) return resolve()
+        ch++
+        setTypedCounts(prev => { const n = prev.slice(); n[i] = ch; return n })
+        if (ch >= len) resolve()
+        else setTimeout(step, CHAR_MS)
+      }
+      step()
+    })
+
+    const run = async () => {
+      for (let i = 0; i < LINES.length; i++) {
+        await waitForProgress(THRESHOLDS[i])   // gate on real loading progress
+        if (cancelled) return
+        setActiveLine(i)
+        setLineDone(false)
+        playBeep(FREQS[i], 0.15)
+        await typeLine(i)
+        if (cancelled) return
+        setLineDone(true)
+        await sleep(GAP_MS)
+        if (cancelled) return
+      }
+
+      // ── Transition out ────────────────────────────────────────────────────
+      await sleep(1200)
+      if (cancelled) return
+      setFlash(true)                            // progress bar flashes white
+      await sleep(180)
+      if (cancelled) return
+      if (audioCtx && humGain) {
+        try { humGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6) } catch { /* ignore */ }
+      }
+      setFadeOut(true)                          // whole screen fades to black
+      await sleep(600)
+      if (cancelled) return
+      onCompleteRef.current?.()
+    }
+    run()
+
+    return () => {
+      cancelled = true
+      try { audioCtx?.close() } catch { /* ignore */ }
+    }
+  }, [])
+
+  const fontSize = isMobile ? '0.75rem' : '0.85rem'
 
   return (
-    <AnimatePresence>
-      {!done && (
-        <motion.div
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 1.6, ease: [0.4, 0, 0.2, 1] }}
+    <div
+      style={{
+        position:   'fixed',
+        inset:      0,
+        zIndex:     9999,
+        background: '#060410',
+        overflow:   'hidden',
+        fontFamily: "'Courier New', Courier, monospace",
+      }}
+    >
+      {/* ── Star field ── */}
+      {stars.map((s, i) => (
+        <div
+          key={i}
           style={{
-            position:       'fixed',
-            inset:          0,
-            background:     '#0c0c0c',
-            display:        'flex',
-            flexDirection:  'column',
-            alignItems:     'center',
-            justifyContent: 'center',
-            zIndex:         9999,
-            overflow:       'hidden',
-            fontFamily:     'Kanit, sans-serif',
+            position:                'absolute',
+            left:                    `${s.x}%`,
+            top:                     `${s.y}%`,
+            width:                   s.size,
+            height:                  s.size,
+            borderRadius:            '50%',
+            background:              '#ffffff',
+            pointerEvents:           'none',
+            animationName:           'loadingStarTwinkle',
+            animationDuration:       `${s.dur}s`,
+            animationDelay:          `${s.delay}s`,
+            animationIterationCount: 'infinite',
+            animationTimingFunction: 'ease-in-out',
           }}
-        >
+        />
+      ))}
 
-          {/* ── Star field ── */}
-          {STARS.map(s => (
-            <motion.div
-              key={s.id}
+      {/* ── Portfolio wordmark ── */}
+      <div
+        style={{
+          position:      'absolute',
+          top:           '1.6rem',
+          left:          0,
+          right:         0,
+          textAlign:     'center',
+          color:         'rgba(190,190,205,0.4)',
+          fontSize:      '0.68rem',
+          letterSpacing: '0.4em',
+          textTransform: 'uppercase',
+          pointerEvents: 'none',
+        }}
+      >
+        ABOO-PORTFOLIO
+      </div>
+
+      {/* ── Mission briefing lines ── */}
+      <div
+        style={{
+          position:      'absolute',
+          top:           '50%',
+          left:          '50%',
+          transform:     'translate(-50%, -50%)',
+          width:         'min(90vw, 640px)',
+          display:       'flex',
+          flexDirection: 'column',
+          gap:           '0.55rem',
+        }}
+      >
+        {LINES.map((line, i) => {
+          const started = typedCounts[i] > 0 || i === activeLine
+          if (!started) return null
+          const isLast    = i === LINES.length - 1
+          const isActive  = i === activeLine
+          const showCursor = isActive && !lineDone
+          return (
+            <div
+              key={i}
               style={{
-                position:     'absolute',
-                left:         `${s.x}%`,
-                top:          `${s.y}%`,
-                width:        s.size,
-                height:       s.size,
-                borderRadius: '50%',
-                background:   '#fff',
-                pointerEvents:'none',
+                fontSize,
+                letterSpacing: '0.2em',
+                color:         isLast ? '#ffffff' : '#22c55e',
+                opacity:       isActive ? 1 : 0.4,
+                transition:    'opacity 0.3s ease',
+                whiteSpace:    'pre-wrap',
+                lineHeight:    1.5,
+                textShadow:    isLast ? '0 0 10px rgba(255,255,255,0.4)' : '0 0 8px rgba(34,197,94,0.35)',
               }}
-              animate={{ opacity: [s.opacity, s.opacity * 5, s.opacity] }}
-              transition={{ duration: s.duration, delay: s.delay, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          ))}
-
-          {/* ── Deep space radial vignette ── */}
-          <div style={{
-            position:   'absolute',
-            inset:      0,
-            background: 'radial-gradient(ellipse 60% 60% at 50% 42%, transparent 0%, rgba(12,12,12,0.7) 100%)',
-            pointerEvents: 'none',
-          }} />
-
-          {/* ── Engine ambient glow on background ── */}
-          <motion.div
-            style={{
-              position:     'absolute',
-              top:          '55%',
-              left:         '50%',
-              transform:    'translate(-50%, -50%)',
-              width:        320,
-              height:       320,
-              borderRadius: '50%',
-              background:   'radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%)',
-              pointerEvents:'none',
-            }}
-            animate={{ opacity: [0.6, 1, 0.6], scale: [0.85, 1.1, 0.85] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
-          />
-
-          {/* ── Rocket ── */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: 'easeOut' }}
-          >
-            <motion.div
-              animate={{ y: [-9, 9, -9], rotate: [-0.6, 0.6, -0.6] }}
-              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
-              style={{ position: 'relative', marginBottom: '3.2rem' }}
             >
-              <svg width="88" height="170" viewBox="0 0 88 170" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {line.slice(0, typedCounts[i])}
+              {showCursor && <span className="loading-cursor">|</span>}
+            </div>
+          )
+        })}
+      </div>
 
-                {/* Exhaust halo */}
-                <motion.ellipse
-                  cx="44" cy="148"
-                  rx={28} ry={22}
-                  fill="url(#exhaustHalo)"
-                  initial={{ ry: 22, opacity: 0.5 }}
-                  animate={{ ry: [20, 28, 17, 26, 20], opacity: [0.5, 0.85, 0.4, 0.75, 0.5] }}
-                  transition={{ duration: 0.28, repeat: Infinity }}
-                />
+      {/* ── Bottom progress bar ── */}
+      <div
+        style={{
+          position:   'absolute',
+          left:       0,
+          right:      0,
+          bottom:     0,
+          height:     3,
+          background: 'rgba(255,255,255,0.06)',
+        }}
+      >
+        <div
+          style={{
+            height:     '100%',
+            width:      `${Math.min(Math.max(progress, 0), 1) * 100}%`,
+            background: flash ? '#ffffff' : 'linear-gradient(90deg, #6d28d9 0%, #a78bfa 100%)',
+            boxShadow:  flash ? '0 0 14px 2px rgba(255,255,255,0.9)' : '0 0 8px rgba(124,58,237,0.7)',
+            transition: 'width 0.3s ease, background 0.15s ease, box-shadow 0.15s ease',
+          }}
+        />
+      </div>
 
-                {/* Flame — outer (orange) */}
-                <motion.ellipse
-                  cx="44" cy="130"
-                  rx={11} ry={24}
-                  fill="url(#flameOuter)"
-                  initial={{ rx: 11, ry: 24 }}
-                  animate={{ ry: [24, 30, 20, 27, 24], rx: [11, 9, 12, 10, 11] }}
-                  transition={{ duration: 0.19, repeat: Infinity }}
-                />
-                {/* Flame — mid (yellow) */}
-                <motion.ellipse
-                  cx="44" cy="126"
-                  rx={6.5} ry={17}
-                  fill="url(#flameMid)"
-                  initial={{ ry: 17, opacity: 0.9 }}
-                  animate={{ ry: [17, 22, 14, 19, 17], opacity: [0.9, 1, 0.8, 1, 0.9] }}
-                  transition={{ duration: 0.15, repeat: Infinity }}
-                />
-                {/* Flame — core (white) */}
-                <motion.ellipse
-                  cx="44" cy="122"
-                  rx={3} ry={10}
-                  fill="#ffffff"
-                  initial={{ ry: 10, opacity: 1 }}
-                  animate={{ ry: [10, 13, 8, 11, 10], opacity: [1, 0.88, 1, 0.92, 1] }}
-                  transition={{ duration: 0.11, repeat: Infinity }}
-                />
-
-                {/* Left fin */}
-                <path d="M26 98 L8 130 L26 118 Z" fill="url(#finGrad)" />
-                {/* Right fin */}
-                <path d="M62 98 L80 130 L62 118 Z" fill="url(#finGrad)" />
-
-                {/* Main body */}
-                <ellipse cx="44" cy="72" rx="22" ry="44" fill="url(#bodyGrad)" />
-
-                {/* Body specular highlight */}
-                <ellipse cx="36" cy="60" rx="4" ry="22" fill="rgba(255,255,255,0.07)" />
-
-                {/* Body panel seams */}
-                <line x1="44" y1="110" x2="44" y2="95" stroke="rgba(167,139,250,0.18)" strokeWidth="0.7" />
-                <line x1="32" y1="88" x2="56" y2="88" stroke="rgba(167,139,250,0.14)" strokeWidth="0.7" />
-                <line x1="30" y1="100" x2="58" y2="100" stroke="rgba(167,139,250,0.14)" strokeWidth="0.7" />
-
-                {/* Nose cone */}
-                <path d="M44 10 L22 52 Q44 38 66 52 Z" fill="url(#noseGrad)" />
-
-                {/* Window ring */}
-                <circle cx="44" cy="67" r="12" fill="#160f2e" stroke="#7c3aed" strokeWidth="1.5" />
-                {/* Window glass */}
-                <circle cx="44" cy="67" r="9" fill="url(#windowGrad)" />
-                {/* Window inner pulse */}
-                <motion.circle
-                  cx="44" cy="67" r={7}
-                  fill="none"
-                  stroke="#a78bfa"
-                  strokeWidth="0.8"
-                  initial={{ r: 7, opacity: 0.3 }}
-                  animate={{ opacity: [0.3, 0.9, 0.3], r: [6, 7.5, 6] }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                {/* Stars in window */}
-                <circle cx="41" cy="64" r="1.2" fill="#c4b5fd" opacity="0.9" />
-                <circle cx="46" cy="69" r="0.8" fill="#a78bfa" opacity="0.6" />
-                <circle cx="43" cy="70" r="0.5" fill="#e9d5ff" opacity="0.4" />
-
-                <defs>
-                  <linearGradient id="bodyGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%"   stopColor="#6d28d9" />
-                    <stop offset="40%"  stopColor="#c4b5fd" />
-                    <stop offset="100%" stopColor="#5b21b6" />
-                  </linearGradient>
-                  <linearGradient id="noseGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%"   stopColor="#7c3aed" />
-                    <stop offset="55%"  stopColor="#a78bfa" />
-                    <stop offset="100%" stopColor="#5b21b6" />
-                  </linearGradient>
-                  <linearGradient id="finGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%"   stopColor="#7c3aed" />
-                    <stop offset="100%" stopColor="#3b0764" />
-                  </linearGradient>
-                  <radialGradient id="windowGrad" cx="35%" cy="35%" r="65%">
-                    <stop offset="0%"   stopColor="#2e1065" />
-                    <stop offset="100%" stopColor="#0a0520" />
-                  </radialGradient>
-                  <radialGradient id="exhaustHalo" cx="50%" cy="0%" r="100%">
-                    <stop offset="0%"   stopColor="#7c3aed" stopOpacity="0.45" />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
-                  </radialGradient>
-                  <linearGradient id="flameOuter" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#fb923c" />
-                    <stop offset="80%"  stopColor="#dc2626" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#dc2626" stopOpacity="0" />
-                  </linearGradient>
-                  <linearGradient id="flameMid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stopColor="#fef08a" />
-                    <stop offset="70%"  stopColor="#fb923c" stopOpacity="0.5" />
-                    <stop offset="100%" stopColor="#fb923c" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </motion.div>
-          </motion.div>
-
-          {/* ── LOADING UNIVERSE label ── */}
-          <motion.p
-            initial={{ opacity: 0, letterSpacing: '0.9em' }}
-            animate={{ opacity: 1, letterSpacing: '0.38em' }}
-            transition={{ duration: 1.4, delay: 0.4, ease: [0.4, 0, 0.2, 1] }}
-            style={{
-              color:         '#c4b5fd',
-              fontSize:      '0.72rem',
-              textTransform: 'uppercase',
-              fontWeight:    300,
-              margin:        0,
-              marginBottom:  '1.6rem',
-            }}
-          >
-            Loading Universe
-          </motion.p>
-
-          {/* ── Progress bar ── */}
-          <motion.div
-            initial={{ opacity: 0, scaleX: 0.6 }}
-            animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ duration: 0.9, delay: 0.25 }}
-            style={{
-              width:        '260px',
-              height:       '2px',
-              background:   'rgba(196,181,253,0.1)',
-              borderRadius: '2px',
-              position:     'relative',
-              marginBottom: '1rem',
-            }}
-          >
-            {/* Fill */}
-            <motion.div
-              style={{
-                position:     'absolute',
-                top:          0,
-                left:         0,
-                height:       '100%',
-                borderRadius: '2px',
-                background:   'linear-gradient(90deg, #4c1d95 0%, #7c3aed 60%, #c4b5fd 100%)',
-                boxShadow:    '0 0 8px 1px rgba(124,58,237,0.6)',
-              }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-            />
-            {/* Lead glow dot */}
-            <motion.div
-              style={{
-                position:     'absolute',
-                top:          '50%',
-                transform:    'translate(-50%, -50%)',
-                width:        6,
-                height:       6,
-                borderRadius: '50%',
-                background:   '#e9d5ff',
-                boxShadow:    '0 0 10px 4px rgba(196,181,253,0.9)',
-              }}
-              animate={{ left: `${progress}%` }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
-            />
-          </motion.div>
-
-          {/* ── Percentage ── */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            style={{
-              color:              'rgba(196,181,253,0.38)',
-              fontSize:           '0.62rem',
-              letterSpacing:      '0.22em',
-              margin:             0,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {String(pct).padStart(3, '0')} %
-          </motion.p>
-
-        </motion.div>
-      )}
-    </AnimatePresence>
+      {/* ── Fade-to-black on exit ── */}
+      <div
+        style={{
+          position:      'absolute',
+          inset:         0,
+          background:    '#000000',
+          opacity:       fadeOut ? 1 : 0,
+          transition:    'opacity 0.6s ease',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
   )
 }

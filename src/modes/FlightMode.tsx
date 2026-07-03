@@ -434,12 +434,12 @@ function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THR
   }
 }
 
-function createISS(): Promise<{ group: THREE.Group; dispose: () => void }> {
+function createISS(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
   return new Promise((resolve, reject) => {
     const base        = import.meta.env.BASE_URL
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    const loader = new GLTFLoader()
+    const loader = new GLTFLoader(manager)
     loader.setDRACOLoader(dracoLoader)
     loader.load(
       base + 'models/iss.glb',
@@ -477,12 +477,12 @@ function createISS(): Promise<{ group: THREE.Group; dispose: () => void }> {
   })
 }
 
-function createJWST(): Promise<{ group: THREE.Group; dispose: () => void }> {
+function createJWST(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
   return new Promise((resolve, reject) => {
     const base        = import.meta.env.BASE_URL
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    const loader = new GLTFLoader()
+    const loader = new GLTFLoader(manager)
     loader.setDRACOLoader(dracoLoader)
     loader.load(
       base + 'models/jwst.glb',
@@ -520,12 +520,12 @@ function createJWST(): Promise<{ group: THREE.Group; dispose: () => void }> {
   })
 }
 
-function createAstronaut(): Promise<{ group: THREE.Group; dispose: () => void }> {
+function createAstronaut(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
   return new Promise((resolve, reject) => {
     const base        = import.meta.env.BASE_URL
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    const loader = new GLTFLoader()
+    const loader = new GLTFLoader(manager)
     loader.setDRACOLoader(dracoLoader)
     loader.load(
       base + 'models/astronaut-compressed.glb',
@@ -676,10 +676,16 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     const container = containerRef.current
     if (!container) return
 
-    const loadingManager = new THREE.LoadingManager(
-      () => setLoadDone(true),
-      (_url, loaded, total) => setLoadProgress((loaded / total) * 100),
-    )
+    // Real asset-loading progress is tracked through this manager (textures +
+    // GLBs are all routed through it). onProgress reports 0–1 but is capped at
+    // 0.95 — the final 5% is reserved for the GPU pre-warm step (see onLoad),
+    // so "100%" only ever means "shaders compiled and textures uploaded".
+    let gpuWarmed = false
+    const loadingManager = new THREE.LoadingManager()
+    loadingManager.onProgress = (_url, loaded, total) => {
+      if (gpuWarmed) return
+      setLoadProgress(total > 0 ? Math.min(loaded / total, 0.95) : 0)
+    }
     const sharedLoader = new THREE.TextureLoader(loadingManager)
 
     // ── Scene / Camera / Renderer ──────────────────────────────────────────
@@ -697,6 +703,22 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     camera.position.set(0, 0, 18)
     camera.lookAt(0, 0, 0)
 
+    // ── GPU pre-warm ───────────────────────────────────────────────────────
+    // Once every tracked texture has loaded, force Three.js to compile all
+    // shader programs and upload all textures to the GPU while the loading
+    // screen is still covering the canvas. This removes the entry lag spike
+    // that used to happen when the GPU was hit with everything on the first
+    // visible frame. Progress only reaches 1.0 after two real frames have
+    // rendered post-compile.
+    loadingManager.onLoad = () => {
+      if (gpuWarmed) return
+      gpuWarmed = true
+      renderer.compile(scene, camera)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setLoadProgress(1))
+      })
+    }
+
     // ── Lights (for UFO shading) ───────────────────────────────────────────
     const ambientLight = new THREE.AmbientLight(0x111122, 0.08)
     scene.add(ambientLight)
@@ -711,7 +733,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // ── 1. Skybox — 3-layer NASA JPL star maps ────────────────────────────
     const base      = import.meta.env.BASE_URL
-    const skyLoader = new THREE.TextureLoader()
+    const skyLoader = new THREE.TextureLoader(loadingManager)
 
     const SKY_SEGS = isMobile ? 16 : 32
 
@@ -1037,33 +1059,38 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     scene.add(moonObj.mesh)
     let moonAngle = 0
 
+    // GLB models are loaded well after the initial scene so their parsing never
+    // competes with the first-frame render / GPU pre-warm.
     let issGroup:   THREE.Group | null = null
     let issAngle    = 0
     let issDispose: (() => void) | null = null
-    createISS().then(({ group, dispose }) => {
-      issGroup   = group
-      issDispose = dispose
-      scene.add(issGroup)
-    })
+    const issTimer = setTimeout(() => {
+      createISS(loadingManager).then(({ group, dispose }) => {
+        issGroup   = group
+        issDispose = dispose
+        scene.add(issGroup)
+      })
+    }, 8000)
 
     let jwstGroup:   THREE.Group | null = null
     let jwstAngle    = 0
     let jwstDispose: (() => void) | null = null
+    let jwstTimer:   ReturnType<typeof setTimeout> | null = null
     if (!isMobile) {
-      setTimeout(() => {
-        createJWST().then(({ group, dispose }) => {
+      jwstTimer = setTimeout(() => {
+        createJWST(loadingManager).then(({ group, dispose }) => {
           jwstGroup   = group
           jwstDispose = dispose
           scene.add(jwstGroup)
         })
-      }, 3000)
+      }, 12000)
     }
 
     let astronautGroup:   THREE.Group | null = null
     let astronautAngle    = Math.PI * 0.3
     let astronautDispose: (() => void) | null = null
-    setTimeout(() => {
-      createAstronaut().then(({ group, dispose }) => {
+    const astronautTimer = setTimeout(() => {
+      createAstronaut(loadingManager).then(({ group, dispose }) => {
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
@@ -1071,7 +1098,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
       })
-    }, 2000)
+    }, 10000)
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
     const mercuryObj = createMercury(sharedLoader, isMobile)
@@ -1516,6 +1543,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     return () => {
       cancelAnimationFrame(rafId)
+      clearTimeout(issTimer)
+      if (jwstTimer) clearTimeout(jwstTimer)
+      clearTimeout(astronautTimer)
       window.removeEventListener('resize', onResize)
       window.removeEventListener('keydown', handleLightKey)
 
@@ -1576,7 +1606,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
   return (
     <div ref={containerRef} style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh' }}>
-      <LoadingScreen progress={loadProgress} done={loadDone} />
+      {!loadDone && <LoadingScreen progress={loadProgress} onComplete={() => setLoadDone(true)} />}
       <FlightHUD
         speed={speed}
         isBoosting={isBoosting}

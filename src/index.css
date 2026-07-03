@@ -42,3 +42,22 @@ body,
   animation: planetLabelPulse 2.2s ease-in-out infinite;
 }
 
+/* Mission-briefing loading screen */
+@keyframes loadingCursorBlink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes loadingStarTwinkle {
+  0%, 100% { opacity: 0.15; }
+  50%      { opacity: 0.9; }
+}
+
+.loading-cursor {
+  animation: loadingCursorBlink 1s step-end infinite;
+}
+
+.loading-star {
+  animation: loadingStarTwinkle var(--twinkle-dur, 3s) ease-in-out infinite;
+}
+

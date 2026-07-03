@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import * as bhRenderer from '../blackhole/renderer'
-import LoadingScreen from '../components/LoadingScreen'
 
 interface BlackHoleModeProps {
   onExit: () => void
@@ -38,8 +37,26 @@ export default function BlackHoleMode({ onExit }: BlackHoleModeProps) {
         height={window.innerHeight}
       />
 
-      {/* Loading screen */}
-      <LoadingScreen progress={ready ? 100 : 0} done={ready} />
+      {/* Minimal loader — fades out once the renderer is ready */}
+      <div
+        style={{
+          position:       'fixed',
+          inset:          0,
+          zIndex:         50,
+          background:     '#060410',
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          opacity:        ready ? 0 : 1,
+          pointerEvents:  ready ? 'none' : 'auto',
+          transition:     'opacity 0.8s ease',
+          fontFamily:     'Kanit, sans-serif',
+        }}
+      >
+        <span style={{ color: 'rgba(196,181,253,0.6)', fontSize: '0.7rem', letterSpacing: '0.35em', textTransform: 'uppercase' }}>
+          Entering Event Horizon
+        </span>
+      </div>
 
       {/* Exit button */}
       <AnimatePresence>
