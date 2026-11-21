@@ -266,6 +266,13 @@ const JWST_SCALE         = 0.08
 const ASTRONAUT_ORBIT_RADIUS = 35
 const ASTRONAUT_SPEED        = 0.0006
 const ASTRONAUT_SCALE        = 3.0
+// Start just ahead-right of the spawn view so he drifts in front of the player
+// after the loading screen lifts (0.3π started him off-screen left, drifting behind).
+const ASTRONAUT_START_ANGLE  = -0.35
+// Fill light kept on the viewer's side of the astronaut (outside his mesh).
+const ASTRONAUT_LIGHT_OFFSET    = 6
+const ASTRONAUT_LIGHT_INTENSITY = 30
+const ASTRONAUT_LIGHT_RANGE     = 12
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -559,7 +566,8 @@ function createAstronaut(manager?: THREE.LoadingManager): Promise<{ group: THREE
             mesh.receiveShadow = false
             mesh.frustumCulled = false
             // KHR_materials_pbrSpecularGlossiness is unsupported in Three.js r184;
-            // replace every mesh's material with MeshBasicMaterial (no lighting needed)
+            // replace every mesh's material with a lit MeshStandardMaterial (lit by the
+            // sun plus the viewer-side fill light set up when he's added to the scene)
             mesh.material = new THREE.MeshStandardMaterial({
               color:     new THREE.Color(0xddddcc),
               roughness: 0.7,
@@ -1087,14 +1095,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     }
 
     let astronautGroup:   THREE.Group | null = null
-    let astronautAngle    = Math.PI * 0.3
+    let astronautAngle    = ASTRONAUT_START_ANGLE
     let astronautDispose: (() => void) | null = null
     const astronautTimer = setTimeout(() => {
       createAstronaut(loadingManager).then(({ group, dispose }) => {
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
-        const astronautLight = new THREE.PointLight(0xfff5e0, 5, 100)
+        const astronautLight = new THREE.PointLight(0xfff5e0, ASTRONAUT_LIGHT_INTENSITY, ASTRONAUT_LIGHT_RANGE)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
       })
@@ -1347,7 +1355,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         astronautGroup.rotation.y += 0.0008
         astronautGroup.rotation.z += 0.0005
         if (astronautGroup.userData.light) {
-          (astronautGroup.userData.light as THREE.PointLight).position.copy(astronautGroup.position)
+          // Keep the fill light between the astronaut and the camera. At his centre
+          // it sat inside the mesh and could only light inward-facing faces, so the
+          // side you actually see (usually his night side: the UFO spawns on Earth's
+          // dark side) rendered near-black against black space.
+          (astronautGroup.userData.light as THREE.PointLight).position
+            .subVectors(camera.position, astronautGroup.position)
+            .setLength(ASTRONAUT_LIGHT_OFFSET)
+            .add(astronautGroup.position)
         }
       }
       mercuryObj.mesh.rotation.y += 0.0008
@@ -1600,6 +1615,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       renderer.dispose()
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement)
     }
+  // Long-lived render loop: mount once. Deps are refs, setters, or per-mount constants.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentional: all refs are stable; isMobile is constant per mount
 
   const nearestIsBlackHole = nearestPlanet?.name === 'M87*'

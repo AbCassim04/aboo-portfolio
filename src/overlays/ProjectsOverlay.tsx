@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import LiveProjectButton from '../components/LiveProjectButton'
-import { PROJECTS } from '../components/ProjectVisuals'
+import { PROJECTS } from '../data/projects'
 import type { Zone } from '../hooks/useCameraNavigation'
 
 interface ProjectsOverlayProps {

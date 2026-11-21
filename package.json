@@ -13,7 +13,6 @@
     "@types/three": "^0.184.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.21.0",
-    "nipplejs": "^1.0.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "three": "^0.184.0"
@@ -29,7 +28,6 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
-    "playwright": "^1.61.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",

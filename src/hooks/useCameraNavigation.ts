@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 
 export type Zone = 'hub' | 'about' | 'skills' | 'projects' | 'contact'
 
@@ -63,8 +63,10 @@ export function useCameraNavigation() {
     setIsTransitioning(false)
   }, [])
 
-  // Keep currentZoneForFrom in sync so navigateTo always captures correct 'from'
-  currentZoneForFrom.current = currentZone
+  // Keep currentZoneForFrom in sync so navigateTo always captures correct 'from'.
+  // onTransitionComplete already writes the ref synchronously before setCurrentZone,
+  // so this effect is a safety net and never lags behind a navigateTo call.
+  useEffect(() => { currentZoneForFrom.current = currentZone }, [currentZone])
 
   return { currentZone, isTransitioning, navigateTo, cameraStateRef, onTransitionComplete }
 }

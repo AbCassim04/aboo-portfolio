@@ -1,7 +1,11 @@
-import { useState } from 'react'
-import HubMode       from './modes/HubMode'
-import FlightMode    from './modes/FlightMode'
-import BlackHoleMode from './modes/BlackHoleMode'
+import { lazy, Suspense, useState } from 'react'
+import HubMode            from './modes/HubMode'
+import FlightMode         from './modes/FlightMode'
+import EventHorizonLoader from './components/EventHorizonLoader'
+
+// Code-split: the black-hole raytracer (renderer + GLSL) only downloads when
+// someone actually enters that mode.
+const BlackHoleMode = lazy(() => import('./modes/BlackHoleMode'))
 
 type AppMode = 'hub' | 'flight' | 'blackhole'
 
@@ -21,7 +25,9 @@ export default function App() {
         />
       )}
       {mode === 'blackhole' && (
-        <BlackHoleMode onExit={() => setMode('flight')} />
+        <Suspense fallback={<EventHorizonLoader visible />}>
+          <BlackHoleMode onExit={() => setMode('flight')} />
+        </Suspense>
       )}
     </div>
   )
