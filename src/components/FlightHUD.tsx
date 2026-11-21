@@ -6,24 +6,22 @@ import Joystick from './Joystick'
 import EarthTimeChip from './EarthTimeChip'
 import type { CloudStatus } from '../earth/liveClouds'
 
-export interface PlanetDot {
-  name: string; x: number; y: number; color: string
-}
-
-// Solar-system body plotted on the NAV radar (world X/Y position).
-export interface SolarBody {
-  key: string; abbr: string; name: string; x: number; y: number; color: string; isSun: boolean
+// Something plotted on the NAV radar: position relative to the ship in km,
+// heading-up (x = right, y = ahead) in the ecliptic plane.
+export interface RadarBlip {
+  key: string; label: string; name: string; color: string; isSun: boolean; x: number; y: number
 }
 
 interface FlightHUDProps {
   speed:          number
   isBoosting:     boolean
+  /** Set only while within landing range of a destination. */
   nearestPlanet:  { name: string; distance: number } | null
-  ufoX:           number
-  ufoY:           number
-  planetDots:     PlanetDot[]
-  solarBodies?:   SolarBody[]
+  radarDots:      RadarBlip[]
+  radarBodies?:   RadarBlip[]
   activeBodyKey?: string | null
+  /** Inside the asteroid belt (local field active). */
+  inBelt?:        boolean
   onExit:         () => void
   inputRef:       React.MutableRefObject<FlightInput>
   onToggleLight?: () => void
@@ -32,10 +30,24 @@ interface FlightHUDProps {
 }
 
 const RADAR_SIZE  = 120
-const RADAR_SCALE = 56 / 32
+// Log-scaled range: radius = R · log10(1 + d/D0) / log10(1 + DMAX/D0), so
+// the portfolio zone (~10⁴ km), the Moon (~4·10⁵ km) and Neptune (~4.5·10⁹ km)
+// all fit on one 58 px dial; bearings are true.
+const RADAR_R    = 52
+const RADAR_D0   = 1_000
+const RADAR_DMAX = 7.5e9
+function radarRadius(dKm: number): number {
+  return RADAR_R * Math.log10(1 + dKm / RADAR_D0) / Math.log10(1 + RADAR_DMAX / RADAR_D0)
+}
+function radarXY(b: RadarBlip): [number, number] {
+  const d = Math.hypot(b.x, b.y)
+  if (d === 0) return [0, 0]
+  const r = Math.min(RADAR_R, radarRadius(d))
+  return [(b.x / d) * r, -(b.y / d) * r]
+}
 
 export default function FlightHUD({
-  speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, solarBodies, activeBodyKey,
+  speed, isBoosting, nearestPlanet, radarDots, radarBodies, activeBodyKey, inBelt,
   onExit, inputRef, onToggleLight, lightOn, cloudStatus,
 }: FlightHUDProps) {
   const [isMobile]   = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
@@ -61,36 +73,28 @@ export default function FlightHUD({
     ctx.fillStyle = 'rgba(12,12,12,0.75)'
     ctx.fill()
 
+    // Range rings at 10⁴ km, 10⁶ km and 1 AU.
     ctx.strokeStyle = 'rgba(215,226,234,0.07)'
     ctx.lineWidth   = 1
-    for (const r of [20, 40]) {
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke()
+    for (const d of [1e4, 1e6, 1.496e8]) {
+      ctx.beginPath(); ctx.arc(cx, cy, radarRadius(d), 0, Math.PI * 2); ctx.stroke()
     }
 
-    for (const p of planetDots) {
-      const dx = (p.x - ufoX) * RADAR_SCALE
-      const dy = -(p.y - ufoY) * RADAR_SCALE
-      if (Math.hypot(dx, dy) > 54) continue
+    // Portfolio destinations (small, close to the centre near Earth).
+    for (const p of radarDots) {
+      const [dx, dy] = radarXY(p)
       ctx.beginPath()
-      ctx.arc(cx + dx, cy + dy, 4, 0, Math.PI * 2)
+      ctx.arc(cx + dx, cy + dy, 2.5, 0, Math.PI * 2)
       ctx.fillStyle = p.color
       ctx.fill()
-      ctx.font      = '8px Arial, sans-serif'
-      ctx.fillStyle = 'rgba(215,226,234,0.5)'
-      ctx.textAlign = 'center'
-      ctx.fillText(p.name, cx + dx, cy + dy - 7)
     }
 
-    // Solar-system bodies — compressed scale, clamped to the rim so distant
-    // planets still show as directional indicators. The Sun is a larger warm
-    // dot; the body the player is nearest to is highlighted with its full name.
-    if (solarBodies && solarBodies.length) {
-      const PS = 50 / 1600   // ≈ rim at 1600 world units
-      for (const b of solarBodies) {
-        let sx = (b.x - ufoX) * PS
-        let sy = -(b.y - ufoY) * PS
-        const m = Math.hypot(sx, sy)
-        if (m > 50) { sx = (sx / m) * 50; sy = (sy / m) * 50 }
+    // Solar-system bodies at their log-scaled range and true bearing. The Sun
+    // is a larger warm dot; the body the player is nearest to is highlighted
+    // with its full name.
+    if (radarBodies && radarBodies.length) {
+      for (const b of radarBodies) {
+        const [sx, sy] = radarXY(b)
         const px = cx + sx, py = cy + sy
         const isActive = b.key === activeBodyKey
         const r = b.isSun ? 5 : isActive ? 4 : 3
@@ -108,7 +112,7 @@ export default function FlightHUD({
         ctx.font      = isActive ? 'bold 8px Kanit, Arial, sans-serif' : '7px Kanit, Arial, sans-serif'
         ctx.fillStyle = isActive ? '#e8ddff' : 'rgba(215,226,234,0.55)'
         ctx.textAlign = 'center'
-        ctx.fillText(isActive ? b.name : b.abbr, px, py - r - 3)
+        ctx.fillText(isActive ? b.name : b.label, px, py - r - 3)
       }
     }
 
@@ -130,7 +134,7 @@ export default function FlightHUD({
     ctx.strokeStyle = 'rgba(119,33,177,0.8)'
     ctx.lineWidth   = 1.5
     ctx.stroke()
-  }, [ufoX, ufoY, planetDots, solarBodies, activeBodyKey])
+  }, [radarDots, radarBodies, activeBodyKey])
 
   // Boost toast polling
   useEffect(() => {
@@ -214,7 +218,7 @@ export default function FlightHUD({
 
       {/* Landing prompt */}
       <AnimatePresence>
-        {nearestPlanet && nearestPlanet.distance < 6 && (
+        {nearestPlanet && (
           <motion.div
             key="landing"
             initial={{ opacity: 0, y: -10 }}
@@ -244,6 +248,29 @@ export default function FlightHUD({
                 <span style={{ opacity: 0.5 }}> to land</span>
               </>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Belt notice: the local asteroid field is far denser than the real belt */}
+      <AnimatePresence>
+        {inBelt && (
+          <motion.div
+            key="belt-note"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            style={{
+              position: 'absolute', top: isMobile ? '9.5rem' : '1.5rem', left: '50%',
+              transform: 'translateX(-50%)', marginTop: isMobile ? 0 : '3.2rem',
+              color: 'rgba(215,226,234,0.55)', fontSize: '0.62rem', letterSpacing: '0.14em',
+              textTransform: 'uppercase', whiteSpace: 'nowrap', pointerEvents: 'none',
+              background: 'rgba(12,12,12,0.35)', borderRadius: '999px', padding: '0.25rem 0.8rem',
+              border: '1px solid rgba(215,226,234,0.1)',
+            }}
+          >
+            Asteroid belt · local density exaggerated
           </motion.div>
         )}
       </AnimatePresence>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import * as bhRenderer from '../blackhole/renderer'
 import EventHorizonLoader from '../components/EventHorizonLoader'
+import { setDebugReady } from '../debug/spaceon'
 
 interface BlackHoleModeProps {
   onExit: () => void
@@ -15,7 +16,7 @@ export default function BlackHoleMode({ onExit }: BlackHoleModeProps) {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    bhRenderer.init(canvas, () => setReady(true))
+    bhRenderer.init(canvas, () => { setReady(true); setDebugReady(true) })
     const onResize = () => bhRenderer.resize(window.innerWidth, window.innerHeight)
     window.addEventListener('resize', onResize)
     return () => {

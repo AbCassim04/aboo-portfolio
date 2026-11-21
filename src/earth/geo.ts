@@ -75,10 +75,14 @@ const _up = new THREE.Vector3(0, 1, 0)
 /**
  * Quaternion that rotates Earth-local space so that the local direction of
  * (subLat, subLon) points along `sunDir` (unit vector from Earth toward the Sun,
- * in the parent's space) with the North Pole leaning toward +Y.
+ * in the parent's space) with the North Pole leaning toward `up` (default +Y).
+ * Passing the true spin axis as `up` gives the real orientation: the subsolar
+ * point is matched exactly and the pole lands on `up` to within the small
+ * inconsistency between the two (≪ 0.1°).
  */
 export function orientTowardSun(
   subLatDeg: number, subLonDeg: number, sunDir: THREE.Vector3, out: THREE.Quaternion,
+  up: THREE.Vector3 = _up,
 ): THREE.Quaternion {
   // Local orthonormal frame: e1 = subsolar direction, e2 = north ⟂ e1.
   latLonToLocal(subLatDeg, subLonDeg, 1, _s)
@@ -89,7 +93,7 @@ export function orientTowardSun(
   // World frame: f1 = sun direction, f2 = +Y ⟂ f1 (falls back to +Z if the
   // sun were ever placed straight overhead).
   _f1.copy(sunDir).normalize()
-  _f2.copy(_up).addScaledVector(_f1, -_up.dot(_f1))
+  _f2.copy(up).addScaledVector(_f1, -up.dot(_f1))
   if (_f2.lengthSq() < 1e-8) _f2.set(0, 0, 1).addScaledVector(_f1, -_f1.z)
   _f2.normalize()
   _f3.crossVectors(_f1, _f2)

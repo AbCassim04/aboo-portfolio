@@ -6,9 +6,10 @@
 // Sun:  NOAA solar-position algorithm (Meeus, "Astronomical Algorithms" ch. 25,
 //       low-accuracy series). Declination good to ~0.01°, equation of time to
 //       a few seconds, which is far below one texel of the Earth texture.
-// Moon: Meeus ch. 47 truncated to the 13 largest longitude terms and 6 latitude
-//       terms. Error ≲ 0.3° in longitude, i.e. the phase angle is right to well
-//       under an hour. (A mean synodic month alone is off by up to ~14 h.)
+// Moon: Meeus ch. 47 truncated to the 13 largest longitude terms, 6 latitude
+//       terms and 11 distance terms. Error ≲ 0.3° in longitude, i.e. the phase
+//       angle is right to well under an hour (a mean synodic month alone is off
+//       by up to ~14 h), and ≲ 0.1 % (a few hundred km) in distance.
 //
 // Longitudes are degrees east, in [-180, 180). Latitudes degrees north.
 
@@ -106,6 +107,8 @@ export interface MoonResult {
   /** Right ascension / declination (deg). */
   ra:  number
   dec: number
+  /** Earth-centre to Moon-centre distance (km). */
+  distanceKm: number
   /** Point on Earth with the Moon at the zenith (geocentric). */
   sublunarLat: number
   sublunarLon: number
@@ -121,7 +124,7 @@ export interface MoonResult {
 
 export function createMoonResult(): MoonResult {
   return {
-    eclLon: 0, eclLat: 0, ra: 0, dec: 0, sublunarLat: 0, sublunarLon: 0,
+    eclLon: 0, eclLat: 0, ra: 0, dec: 0, distanceKm: 385000.56, sublunarLat: 0, sublunarLon: 0,
     elongation: 0, illumination: 0, phase: 0, waxing: true,
   }
 }
@@ -163,6 +166,20 @@ export function moonPosition(ms: number, out: MoonResult): MoonResult {
     + 0.055413 * Math.sin(2 * D - Mp + F)
     + 0.046271 * Math.sin(2 * D - Mp - F)
 
+  // Distance: Meeus 47 Σr, largest terms (units of 0.001 km).
+  const sr =
+    - 20905355 * Math.cos(Mp)
+    -  3699111 * Math.cos(2 * D - Mp)
+    -  2955968 * Math.cos(2 * D)
+    -   569925 * Math.cos(2 * Mp)
+    +   246158 * Math.cos(2 * D - 2 * Mp)
+    -   204586 * E * Math.cos(2 * D - M)
+    -   170733 * Math.cos(2 * D + Mp)
+    -   152138 * E * Math.cos(2 * D - M - Mp)
+    -   129620 * E * Math.cos(M - Mp)
+    +   108743 * Math.cos(D)
+    +   104755 * E * Math.cos(M + Mp)
+
   const sun  = subsolarPoint(ms, _sun)
   const epsR = sun.obliquity * DEG
   const lr   = lon * DEG
@@ -180,6 +197,7 @@ export function moonPosition(ms: number, out: MoonResult): MoonResult {
   out.eclLat       = lat
   out.ra           = wrap360(ra)
   out.dec          = dec
+  out.distanceKm   = 385000.56 + sr / 1000
   out.sublunarLat  = dec
   out.sublunarLon  = wrap180(ra - gmstDeg(ms))
   out.elongation   = elong

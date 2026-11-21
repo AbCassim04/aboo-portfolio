@@ -29,7 +29,7 @@ interface AsteroidOrbit {
   speed:           number
 }
 
-function seededRandom(seed: number) {
+export function seededRandom(seed: number) {
   let s = seed
   return () => {
     s = (s * 1664525 + 1013904223) & 0xffffffff
@@ -68,11 +68,36 @@ function noise2D(x: number, y: number): number {
 // per-instance world transform. instanceColor is NOT injected by Three.js here
 // because we manage it as a geometry attribute rather than via setColorAt().
 
+// Log-depth chunks are included in every shader (no-ops unless the renderer
+// enables logarithmicDepthBuffer, as flight mode does — see space/depth.ts).
+//
+// FLOATING_ORIGIN (flight mode): the scene is rendered camera-relative, so
+// "world" positions here are relative to the camera — right for lighting
+// (viewDir = −vWorldPos) but not for texturing. Triplanar coordinates then come
+// from the rock-attached offset (rotated + scaled vertex, world units) plus a
+// per-instance seed, so textures stay fixed on each rock instead of swimming as
+// it orbits or as the camera moves. Without the define (the hub) the shader is
+// unchanged.
+//
+// ROCK_SPACE_TEX (true-scale local field): triplanar coordinates in the rock's
+// own unit-sphere space (and blend weights from the object-space normal), so
+// the texture covers each rock the same way whatever its size in km.
+//
+// lightGain scales the sunlit terms (1 = unchanged); the flight scene drives it
+// with the sunlight level at the rocks.
 const VERT = /* glsl */`
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   attribute vec3 instanceColor;
   varying   vec3 vInstanceColor;
   varying   vec3 vWorldPos;
   varying   vec3 vWorldNormal;
+  #if defined(FLOATING_ORIGIN) || defined(ROCK_SPACE_TEX)
+  varying   vec3 vTexPos;
+  #endif
+  #ifdef ROCK_SPACE_TEX
+  varying   vec3 vObjNormal;
+  #endif
 
   void main() {
     // instanceMatrix: per-instance local transform (injected in prefix by Three.js)
@@ -85,12 +110,21 @@ const VERT = /* glsl */`
     vWorldNormal   = normalize(mat3(instancedModelMatrix) * normal);
     vInstanceColor = instanceColor;
 
+    #if defined(ROCK_SPACE_TEX)
+    vTexPos    = position * 1.6 + instanceColor * 97.0;
+    vObjNormal = normal;
+    #elif defined(FLOATING_ORIGIN)
+    vTexPos = mat3(instancedModelMatrix) * position + instanceColor * 97.0;
+    #endif
+
     // viewMatrix is provided in prefix; use it directly with the world position
     gl_Position = projectionMatrix * viewMatrix * worldPos;
+    #include <logdepthbuf_vertex>
   }
 `
 
 const FRAG = /* glsl */`
+  #include <logdepthbuf_pars_fragment>
   uniform sampler2D diffuseMap;
   uniform sampler2D normalMap;
   uniform sampler2D roughMap;
@@ -98,20 +132,36 @@ const FRAG = /* glsl */`
   uniform float     scale;
   uniform vec3      sunDir;
   uniform vec3      ambientCol;
+  uniform float     lightGain;
 
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
   varying vec3 vInstanceColor;
+  #if defined(FLOATING_ORIGIN) || defined(ROCK_SPACE_TEX)
+  varying vec3 vTexPos;
+  #endif
+  #ifdef ROCK_SPACE_TEX
+  varying vec3 vObjNormal;
+  #endif
 
   void main() {
+    #include <logdepthbuf_fragment>
     vec3 n = normalize(vWorldNormal);
 
     // Triplanar blend weights — sharper = less blending at seams
+    #ifdef ROCK_SPACE_TEX
+    vec3 blend = pow(abs(normalize(vObjNormal)), vec3(sharpness));
+    #else
     vec3 blend = pow(abs(n), vec3(sharpness));
+    #endif
     blend /= (blend.x + blend.y + blend.z + 0.001);
 
     // Sample diffuse from 3 axes
+    #if defined(FLOATING_ORIGIN) || defined(ROCK_SPACE_TEX)
+    vec3 p = vTexPos * scale;
+    #else
     vec3 p = vWorldPos * scale;
+    #endif
     vec4 xCol = texture2D(diffuseMap, p.yz);
     vec4 yCol = texture2D(diffuseMap, p.xz);
     vec4 zCol = texture2D(diffuseMap, p.xy);
@@ -153,14 +203,16 @@ const FRAG = /* glsl */`
     // HSL range used when generating tints), modulated by the AO term.
     vec3 tintedCol = col.rgb * vInstanceColor * 2.0 * ao;
 
-    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 1.2)) + vec3(spec) + vec3(glint);
-    litCol = max(litCol, tintedCol * 0.5);
+    vec3 litCol = tintedCol * (ambientCol + vec3(diff * 1.2 * lightGain)) + vec3(spec + glint) * lightGain;
+    litCol = max(litCol, tintedCol * 0.5 * min(lightGain, 1.0));
     gl_FragColor = vec4(litCol, 1.0);
   }
 `
 
 // ── Far-distance point sprite shaders ────────────────────────────────────────
 const FAR_VERT = /* glsl */`
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   attribute vec3  color;
   attribute float size;
   varying   vec3  vColor;
@@ -170,12 +222,15 @@ const FAR_VERT = /* glsl */`
     // Larger base size so the belt reads as a distinct ring from far away.
     gl_PointSize = size * (620.0 / -mvPosition.z);
     gl_Position  = projectionMatrix * mvPosition;
+    #include <logdepthbuf_vertex>
   }
 `
 
 const FAR_FRAG = /* glsl */`
+  #include <logdepthbuf_pars_fragment>
   varying vec3 vColor;
   void main() {
+    #include <logdepthbuf_fragment>
     float dist = length(gl_PointCoord - vec2(0.5));
     if (dist > 0.5) discard;
     // Bright core + soft additive glow halo so the sprites catch light
@@ -191,6 +246,8 @@ const FAR_FRAG = /* glsl */`
 // extremely faint — it just gives the belt a visible presence from outside
 // before individual asteroids resolve.
 const HAZE_VERT = /* glsl */`
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   uniform float uInner;
   uniform float uOuter;
   varying float vR;
@@ -201,14 +258,17 @@ const HAZE_VERT = /* glsl */`
     float r = length(position.xy);
     vR = (r - uInner) / (uOuter - uInner);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
   }
 `
 
 const HAZE_FRAG = /* glsl */`
+  #include <logdepthbuf_pars_fragment>
   uniform vec3  uColor;
   uniform float uOpacity;
   varying float vR;
   void main() {
+    #include <logdepthbuf_fragment>
     // Soft bump peaking at the middle of the belt, fading at both edges.
     // Extra 0.5 multiplier keeps the scattered-dust look barely-there rather
     // than a solid colored disc.
@@ -216,6 +276,70 @@ const HAZE_FRAG = /* glsl */`
     gl_FragColor = vec4(uColor, edge * uOpacity * 0.5);
   }
 `
+
+// ── Shared building blocks (also used by the true-scale belt field) ───────────
+
+export interface AsteroidTextures {
+  diff:   THREE.Texture
+  normal: THREE.Texture
+  rough:  THREE.Texture
+}
+
+/** Load the rock textures (diffuse sRGB; all repeat-wrapped). */
+export function loadAsteroidTextures(loader: THREE.TextureLoader = new THREE.TextureLoader()): AsteroidTextures {
+  const base = typeof import.meta !== 'undefined' ? (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/' : '/'
+  const diff   = loader.load(base + 'textures/asteroid-diff.jpg')
+  const normal = loader.load(base + 'textures/asteroid-normal.jpg')
+  const rough  = loader.load(base + 'textures/asteroid-rough.jpg')
+  diff.colorSpace = THREE.SRGBColorSpace
+  for (const t of [diff, normal, rough]) t.wrapS = t.wrapT = THREE.RepeatWrapping
+  return { diff, normal, rough }
+}
+
+/** The triplanar rock material (see VERT/FRAG above for the defines). */
+export function createRockMaterial(tex: AsteroidTextures, defines: Record<string, string> = {}, texScale = 0.55): THREE.ShaderMaterial {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      diffuseMap:  { value: tex.diff },
+      normalMap:   { value: tex.normal },
+      roughMap:    { value: tex.rough },
+      sharpness:   { value: 4.0 },
+      scale:       { value: texScale },
+      sunDir:      { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
+      ambientCol:  { value: new THREE.Color(0x888899) },
+      lightGain:   { value: 1.0 },
+    },
+    vertexShader:   VERT,
+    fragmentShader: FRAG,
+    side: THREE.FrontSide,
+    defines,
+  })
+  mat.name = 'asteroid-triplanar'
+  return mat
+}
+
+/** Point-sprite material for distant rocks (attributes: position, color, size). */
+export function createRockPointsMaterial(): THREE.ShaderMaterial {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      sunDir: { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
+    },
+    vertexShader:   FAR_VERT,
+    fragmentShader: FAR_FRAG,
+    transparent:    true,
+    depthWrite:     false,
+  })
+  mat.name = 'asteroid-far-points'
+  return mat
+}
+
+export interface AsteroidFieldOptions {
+  /**
+   * The field is drawn by a camera-relative (floating-origin) renderer: use
+   * rock-attached triplanar coordinates (see FLOATING_ORIGIN above).
+   */
+  floatingOrigin?: boolean
+}
 
 export class AsteroidField {
   private meshHigh:   THREE.InstancedMesh
@@ -234,11 +358,11 @@ export class AsteroidField {
   private colors:    THREE.Color[]
   private time:      number = 2
   private isMobile:  boolean
-  private scene:     THREE.Scene | null = null
+  private scene:     THREE.Object3D | null = null
   private _tempPos:  THREE.Vector3
   private _zeroCam:  THREE.Vector3
 
-  constructor(config: AsteroidFieldConfig, isMobile: boolean) {
+  constructor(config: AsteroidFieldConfig, isMobile: boolean, options: AsteroidFieldOptions = {}) {
     this.config   = config
     this.isMobile = isMobile
     this.dummy    = new THREE.Object3D()
@@ -246,17 +370,10 @@ export class AsteroidField {
     this._zeroCam  = new THREE.Vector3()
 
     // ── Textures ──────────────────────────────────────────────────────────
-    const base   = typeof import.meta !== 'undefined' ? (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/' : '/'
-    const loader = new THREE.TextureLoader()
-
-    this.diffTex   = loader.load(base + 'textures/asteroid-diff.jpg')
-    this.normalTex = loader.load(base + 'textures/asteroid-normal.jpg')
-    this.roughTex  = loader.load(base + 'textures/asteroid-rough.jpg')
-
-    this.diffTex.colorSpace   = THREE.SRGBColorSpace
-    this.diffTex.wrapS        = this.diffTex.wrapT   = THREE.RepeatWrapping
-    this.normalTex.wrapS      = this.normalTex.wrapT = THREE.RepeatWrapping
-    this.roughTex.wrapS       = this.roughTex.wrapT  = THREE.RepeatWrapping
+    const tex = loadAsteroidTextures()
+    this.diffTex   = tex.diff
+    this.normalTex = tex.normal
+    this.roughTex  = tex.rough
 
     // ── Geometry ──────────────────────────────────────────────────────────
     const count = isMobile ? config.countMobile : config.count
@@ -277,20 +394,7 @@ export class AsteroidField {
     const geoMid = new THREE.IcosahedronGeometry(1, 2)
 
     // ── Instanced material (triplanar) ────────────────────────────────────
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        diffuseMap:  { value: this.diffTex },
-        normalMap:   { value: this.normalTex },
-        roughMap:    { value: this.roughTex },
-        sharpness:   { value: 4.0 },
-        scale:       { value: 0.55 },
-        sunDir:      { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
-        ambientCol:  { value: new THREE.Color(0x888899) },
-      },
-      vertexShader:   VERT,
-      fragmentShader: FRAG,
-      side: THREE.FrontSide,
-    })
+    const mat = createRockMaterial(tex, options.floatingOrigin ? { FLOATING_ORIGIN: '' } : {})
 
     // ── InstancedMeshes (high + mid detail) ───────────────────────────────
     this.meshHigh = new THREE.InstancedMesh(geoHigh, mat, count)
@@ -326,15 +430,7 @@ export class AsteroidField {
     farGeo.setAttribute('color',    new THREE.BufferAttribute(farColors,    3))
     farGeo.setAttribute('size',     new THREE.BufferAttribute(farSizes,     1))
 
-    const farMat = new THREE.ShaderMaterial({
-      uniforms: {
-        sunDir: { value: new THREE.Vector3(1, 0.3, 0.1).normalize() },
-      },
-      vertexShader:   FAR_VERT,
-      fragmentShader: FAR_FRAG,
-      transparent:    true,
-      depthWrite:     false,
-    })
+    const farMat = createRockPointsMaterial()
 
     this.pointsLow = new THREE.Points(farGeo, farMat)
     this.pointsLow.frustumCulled = false
@@ -362,15 +458,20 @@ export class AsteroidField {
         color: { value: new THREE.Color(0xaaaa99) },
       },
       vertexShader: `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
         void main() {
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
           gl_PointSize = 8.0 * (300.0 / -mvPosition.z);
           gl_Position  = projectionMatrix * mvPosition;
+          #include <logdepthbuf_vertex>
         }
       `,
       fragmentShader: `
+        #include <logdepthbuf_pars_fragment>
         uniform vec3 color;
         void main() {
+          #include <logdepthbuf_fragment>
           float dist = length(gl_PointCoord - vec2(0.5));
           if (dist > 0.5) discard;
           float alpha = smoothstep(0.5, 0.0, dist) * 0.08;
@@ -523,7 +624,8 @@ export class AsteroidField {
     )
   }
 
-  addToScene(scene: THREE.Scene): void {
+  /** Add the field's objects to `scene` (or any parent group). */
+  addToScene(scene: THREE.Object3D): void {
     this.scene = scene
     scene.add(this.hazeRing)     // faint ring glow, furthest back
     scene.add(this.dustPoints)   // behind asteroids

@@ -66,6 +66,7 @@ function frame() {
   const ms = getSimTimeMs()
   earth.update(ms)
   moonPlacer.update(ms)
+  moon.position.copy(earth.group.position).add(moonPlacer.offset)
   placeCamera()
   renderer.render(scene, camera)
   info.textContent = `${new Date(ms).toISOString()}  ${status}`

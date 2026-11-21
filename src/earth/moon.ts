@@ -9,7 +9,13 @@ import { latLonToLocal } from './geo'
 // Earth-local space and rotated by the live Earth orientation. Because the
 // Earth is oriented against the scene Sun, the Sun–Earth–Moon angle — and so
 // the phase lit by the scene's DirectionalLight — matches the real sky.
-// Distance is kept at a compact display radius (real ratio would be ~60 R⊕).
+// Distance is `orbitRadius` (the caller's choice of scale) or, with
+// orbitRadius = 'true', the real Earth–Moon distance in km from the series.
+//
+// The placer only orients the Moon and computes `offset` (Earth → Moon, world
+// axes); the caller positions it (Earth world position + offset), so it works
+// with camera-relative rendering where the Earth's Object3D position is not a
+// world position.
 //
 // Tidal locking: the near side (texture lon 0°, local +X, see geo.ts) is
 // turned toward Earth, with lunar north kept close to Earth's north.
@@ -25,6 +31,8 @@ const _m     = new THREE.Matrix4()
 export interface MoonPlacer {
   /** Latest ephemeris (phase, elongation, …) — read-only. */
   readonly state: MoonResult
+  /** Earth → Moon vector in world axes (updated by update()). */
+  readonly offset: THREE.Vector3
   /** Recompute if sim time moved more than the threshold (or `force`). */
   update(simMs: number, force?: boolean): void
 }
@@ -32,15 +40,19 @@ export interface MoonPlacer {
 export function createMoonPlacer(
   moon:        THREE.Object3D,
   earthGroup:  THREE.Object3D,
-  orbitRadius: number,
+  orbitRadius: number | 'true',
+  // The Moon moves ~0.5°/h across the sky; at a compact display distance 10
+  // sim-seconds is far below a pixel. At true scale it moves ~1 km/s, so the
+  // flight scene passes 0 (update every frame).
+  THRESHOLD_MS = 10_000,
 ): MoonPlacer {
-  const state = createMoonResult()
-  let lastMs  = NaN
-  // The Moon moves ~0.5°/h across the sky; 10 sim-seconds is far below a pixel.
-  const THRESHOLD_MS = 10_000
+  const state  = createMoonResult()
+  const offset = new THREE.Vector3()
+  let lastMs   = NaN
 
   return {
     state,
+    offset,
     update(simMs: number, force = false) {
       if (!force && Math.abs(simMs - lastMs) < THRESHOLD_MS) return
       lastMs = simMs
@@ -48,7 +60,7 @@ export function createMoonPlacer(
 
       // Direction Earth→Moon in world space.
       latLonToLocal(state.sublunarLat, state.sublunarLon, 1, _dir).applyQuaternion(earthGroup.quaternion)
-      moon.position.copy(earthGroup.position).addScaledVector(_dir, orbitRadius)
+      offset.copy(_dir).multiplyScalar(orbitRadius === 'true' ? state.distanceKm : orbitRadius)
 
       // Tidal lock: local +X → toward Earth, local +Y → Earth's north (⟂).
       _north.set(0, 1, 0).applyQuaternion(earthGroup.quaternion)

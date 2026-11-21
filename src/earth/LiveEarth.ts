@@ -18,8 +18,24 @@ import { getSimTimeMs } from '../sim/simClock'
 
 export interface LiveEarthOptions {
   radius?:         number
-  /** Unit vector from Earth toward the Sun (world space). */
+  /** Cloud shell radius as a multiple of `radius` (default 1.008). */
+  cloudScale?:     number
+  /** Atmosphere rim radius as a multiple of `radius` (default 1.1). */
+  atmosphereScale?: number
+  /**
+   * Unit vector from Earth toward the Sun (world space). Read on every
+   * orientation update, so the caller may keep changing it.
+   */
   sunDirection?:   THREE.Vector3
+  /**
+   * True spin axis (world space), read on every update. Without it the pole
+   * leans toward world +Y (the fixed-Sun hub/flight layout).
+   */
+  poleHint?:       THREE.Vector3
+  /** Skip re-orientation until sim time moved this much (default 1000 ms). */
+  orientThresholdMs?: number
+  /** Sphere segments around the equator (default 96, mobile 48). */
+  segments?:       number
   /** Alternatively derive the sun direction from this light. */
   sunLight?:       THREE.DirectionalLight
   /** Used for anisotropy and to pre-upload a late-arriving cloud texture. */
@@ -40,34 +56,46 @@ export interface LiveEarth {
   atmosphereMesh: THREE.Mesh
   pinMesh:        THREE.Mesh | null
   radius:         number
-  /** Re-orient for `simMs` (no-op if sim time moved < 1 s, unless forced). */
+  /** Re-orient for `simMs` (no-op if sim time moved < the threshold, unless forced). */
   update(simMs: number, force?: boolean): void
+  /** Scale the shader-lit parts (clouds, rim, twilight) with the sunlight level. */
+  setLightGain(gain: number): void
   getCloudStatus(): CloudStatus
   dispose(): void
 }
 
 const JOHANNESBURG = { lat: -26.2041, lon: 28.0473 }
-const ORIENT_THRESHOLD_MS = 1000   // Earth turns 0.004° per second
+const ORIENT_THRESHOLD_MS = 1000   // default; Earth turns 0.004° per second
 
 // ── Shaders ─────────────────────────────────────────────────────────────────
+// All include the log-depth chunks (no-ops unless the renderer enables a
+// logarithmic depth buffer, as flight mode does — see space/depth.ts). They
+// only use rotation (mat3(modelMatrix)) and view-space positions, so they work
+// unchanged under camera-relative rendering.
 
 const CLOUD_VERT = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_vertex>
 varying vec2 vUv;
 varying vec3 vWorldNormal;
 void main() {
   vUv = uv;
   vWorldNormal = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
 }`
 
 const CLOUD_FRAG = /* glsl */`
+#include <logdepthbuf_pars_fragment>
 uniform sampler2D uCloudTex;
 uniform float uLuma;      // 1 = static greyscale map (alpha from luminance)
 uniform float uOpacity;
 uniform vec3  uSunDir;
+uniform float uLightGain;
 varying vec2 vUv;
 varying vec3 vWorldNormal;
 void main() {
+  #include <logdepthbuf_fragment>
   vec4  t      = texture2D(uCloudTex, vUv);
   float luma   = dot(t.rgb, vec3(0.299, 0.587, 0.114));
   float a      = mix(t.a, smoothstep(0.08, 0.85, luma), uLuma);
@@ -78,26 +106,32 @@ void main() {
   float zd     = (mu + 0.02) / 0.07;   // (no pow(): undefined for negative bases)
   vec3  dusk   = vec3(1.0, 0.50, 0.24) * exp(-zd * zd);
   // Faint "moonlit" floor so night-side clouds read as silhouettes.
-  vec3  col    = albedo * (vec3(1.0, 0.97, 0.92) * lit * 1.1 + dusk * 0.35 + vec3(0.022, 0.026, 0.040));
+  vec3  col    = albedo * ((vec3(1.0, 0.97, 0.92) * lit * 1.1 + dusk * 0.35) * uLightGain + vec3(0.022, 0.026, 0.040));
   gl_FragColor = vec4(col, a * uOpacity);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`
 
 const ATMO_VERT = /* glsl */`
+#include <common>
+#include <logdepthbuf_pars_vertex>
 varying vec3 vNormal;
 varying vec3 vWorldNormal;
 void main() {
   vNormal      = normalize(normalMatrix * normal);
   vWorldNormal = normalize(mat3(modelMatrix) * normal);
   gl_Position  = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  #include <logdepthbuf_vertex>
 }`
 
 const ATMO_FRAG = /* glsl */`
+#include <logdepthbuf_pars_fragment>
 uniform vec3 uSunDir;
+uniform float uLightGain;
 varying vec3 vNormal;
 varying vec3 vWorldNormal;
 void main() {
+  #include <logdepthbuf_fragment>
   float intensity = pow(max(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 0.0), 3.0);
   float mu   = dot(normalize(vWorldNormal), uSunDir);
   float lit  = smoothstep(-0.30, 0.45, mu);
@@ -106,7 +140,7 @@ void main() {
   vec3  col  = mix(dark, day, lit);
   float z = (mu + 0.05) / 0.16;
   col += vec3(1.0, 0.45, 0.18) * exp(-z * z) * 0.45;
-  gl_FragColor = vec4(col, 1.0) * intensity * mix(0.18, 1.0, lit);
+  gl_FragColor = vec4(col, 1.0) * intensity * mix(0.18, 1.0, lit) * uLightGain;
 }`
 
 // Injected into MeshPhongMaterial so the Earth keeps three.js lighting (sun,
@@ -122,6 +156,7 @@ uniform vec3      uSunDir;
 uniform sampler2D uCloudTex;
 uniform float     uCloudLuma;
 uniform float     uNightIntensity;
+uniform float     uLightGain;
 varying vec3      vLeWorldNormal;`
 
 const EARTH_FRAG_AFTER_MAP = /* glsl */`
@@ -147,10 +182,10 @@ const EARTH_FRAG_OUTGOING = /* glsl */`
 // Twilight: faint warm band straddling the terminator.
 float leZ  = (leMu - 0.015) / 0.075;
 float leTw = exp(-leZ * leZ);
-outgoingLight += vec3(1.0, 0.48, 0.22) * leTw * 0.10 * (diffuseColor.rgb + 0.08);
+outgoingLight += vec3(1.0, 0.48, 0.22) * leTw * 0.10 * (diffuseColor.rgb + 0.08) * uLightGain;
 // Blue haze toward the sunlit limb.
 float leFres = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
-outgoingLight += vec3(0.30, 0.55, 1.00) * leFres * smoothstep(-0.15, 0.45, leMu) * 0.30;
+outgoingLight += vec3(0.30, 0.55, 1.00) * leFres * smoothstep(-0.15, 0.45, leMu) * 0.30 * uLightGain;
 #include <opaque_fragment>`
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -163,7 +198,7 @@ export function createLiveEarth(
   const R        = opts.radius ?? 10
   const base     = import.meta.env.BASE_URL
   const manager  = loader.manager
-  const segs     = isMobile ? 48 : 96
+  const segs     = opts.segments ?? (isMobile ? 48 : 96)
   const maxAniso = opts.renderer ? Math.min(8, opts.renderer.capabilities.getMaxAnisotropy()) : 4
 
   const sunDir = new THREE.Vector3(-1, 0, 0)
@@ -190,6 +225,7 @@ export function createLiveEarth(
     uCloudTex:       { value: blankClouds as THREE.Texture },
     uCloudLuma:      { value: 0 },
     uNightIntensity: { value: 1.25 },
+    uLightGain:      { value: 1 },
   }
 
   const earthGeo = new THREE.SphereGeometry(R, segs, segs / 2)
@@ -213,13 +249,13 @@ export function createLiveEarth(
       .replace('#include <emissivemap_fragment>', EARTH_FRAG_EMISSIVE)
       .replace('#include <opaque_fragment>', EARTH_FRAG_OUTGOING)
   }
-  earthMat.customProgramCacheKey = () => 'live-earth-v1'
+  earthMat.customProgramCacheKey = () => 'live-earth-v2'
   const earthMesh = new THREE.Mesh(earthGeo, earthMat)
   earthMesh.name = 'LiveEarthSurface'
   group.add(earthMesh)
 
   // ── Clouds (share the Earth frame — no independent drift) ──
-  const cloudGeo = new THREE.SphereGeometry(R * 1.008, segs, segs / 2)
+  const cloudGeo = new THREE.SphereGeometry(R * (opts.cloudScale ?? 1.008), segs, segs / 2)
   const cloudMat = new THREE.ShaderMaterial({
     vertexShader:   CLOUD_VERT,
     fragmentShader: CLOUD_FRAG,
@@ -227,26 +263,29 @@ export function createLiveEarth(
       uCloudTex: shared.uCloudTex,
       uLuma:     shared.uCloudLuma,
       uSunDir:   shared.uSunDir,
+      uLightGain: shared.uLightGain,
       uOpacity:  { value: 0.95 },
     },
     transparent: true,
     depthWrite:  false,
   })
+  cloudMat.name = 'live-earth-clouds'
   const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
   cloudMesh.name = 'LiveEarthClouds'
   group.add(cloudMesh)
 
   // ── Atmosphere rim ──
-  const atmoGeo = new THREE.SphereGeometry(R * 1.1, isMobile ? 32 : 64, isMobile ? 16 : 32)
+  const atmoGeo = new THREE.SphereGeometry(R * (opts.atmosphereScale ?? 1.1), isMobile ? 48 : 96, isMobile ? 24 : 48)
   const atmoMat = new THREE.ShaderMaterial({
     vertexShader:   ATMO_VERT,
     fragmentShader: ATMO_FRAG,
-    uniforms:       { uSunDir: shared.uSunDir },
+    uniforms:       { uSunDir: shared.uSunDir, uLightGain: shared.uLightGain },
     side:           THREE.BackSide,
     blending:       THREE.AdditiveBlending,
     transparent:    true,
     depthWrite:     false,
   })
+  atmoMat.name = 'live-earth-atmosphere'
   const atmosphereMesh = new THREE.Mesh(atmoGeo, atmoMat)
   group.add(atmosphereMesh)
 
@@ -266,12 +305,15 @@ export function createLiveEarth(
 
   // ── Orientation ──
   const sub    = createSubsolarResult()
+  const threshold = opts.orientThresholdMs ?? ORIENT_THRESHOLD_MS
   let lastMs   = NaN
   const update = (simMs: number, force = false) => {
-    if (!force && Math.abs(simMs - lastMs) < ORIENT_THRESHOLD_MS) return
+    if (!force && Math.abs(simMs - lastMs) < threshold) return
     lastMs = simMs
+    if (opts.sunDirection) sunDir.copy(opts.sunDirection).normalize()
     subsolarPoint(simMs, sub)
-    orientTowardSun(sub.lat, sub.lon, sunDir, group.quaternion)
+    if (opts.poleHint) orientTowardSun(sub.lat, sub.lon, sunDir, group.quaternion, opts.poleHint)
+    else orientTowardSun(sub.lat, sub.lon, sunDir, group.quaternion)
   }
   update(getSimTimeMs(), true)
 
@@ -382,6 +424,7 @@ export function createLiveEarth(
   return {
     group, earthMesh, cloudMesh, atmosphereMesh, pinMesh, radius: R,
     update,
+    setLightGain: (g: number) => { shared.uLightGain.value = g },
     getCloudStatus: () => status,
     dispose: () => {
       disposed = true
