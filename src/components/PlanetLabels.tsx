@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { PLANET_DATA } from '../data/planetData'
 
-// One entry per PLANET_DATA row, in the same order. The flight loop writes
+export interface LabelItem { key: string; name: string; colorCss: string }
+
+// One entry per item, in the same order. The flight loop writes
 // screen-space pixel coordinates + visibility here every frame; this component
 // reads it in its own rAF loop and moves the DOM nodes directly (no per-frame
 // React re-render).
@@ -12,11 +13,14 @@ export interface PlanetLabelDatum {
 }
 
 interface PlanetLabelsProps {
+  items:    LabelItem[]
   dataRef:  React.MutableRefObject<PlanetLabelDatum[]>
   onSelect: (key: string) => void
+  /** Highlight the current target. */
+  targetKey?: string | null
 }
 
-export default function PlanetLabels({ dataRef, onSelect }: PlanetLabelsProps) {
+export default function PlanetLabels({ items, dataRef, onSelect, targetKey }: PlanetLabelsProps) {
   const nodeRefs = useRef<(HTMLDivElement | null)[]>([])
   const boxRefs  = useRef<(HTMLButtonElement | null)[]>([])
 
@@ -41,7 +45,7 @@ export default function PlanetLabels({ dataRef, onSelect }: PlanetLabelsProps) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 16, pointerEvents: 'none', overflow: 'hidden' }}>
-      {PLANET_DATA.map((p, i) => (
+      {items.map((p, i) => (
         <div
           key={p.key}
           ref={(el) => { nodeRefs.current[i] = el }}
@@ -84,6 +88,7 @@ export default function PlanetLabels({ dataRef, onSelect }: PlanetLabelsProps) {
           <button
             ref={(el) => { boxRefs.current[i] = el }}
             className="planet-label-chip"
+            data-label={p.key}
             onClick={() => onSelect(p.key)}
             style={{
               position:      'absolute',
@@ -97,7 +102,7 @@ export default function PlanetLabels({ dataRef, onSelect }: PlanetLabelsProps) {
               padding:       '0.32rem 0.7rem',
               borderRadius:  '999px',
               background:    'rgba(20,8,40,0.6)',
-              border:        '1px solid rgba(139,92,246,0.55)',
+              border:        p.key === targetKey ? '1px solid rgba(125,249,255,0.85)' : '1px solid rgba(139,92,246,0.55)',
               backdropFilter:'blur(6px)',
               color:         '#e8ddff',
               fontFamily:    'Kanit, sans-serif',

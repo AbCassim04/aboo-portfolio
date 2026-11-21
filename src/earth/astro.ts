@@ -21,6 +21,18 @@ export function julianDay(ms: number): number {
   return ms / 86400000 + 2440587.5
 }
 
+/** 2000-01-01T12:00:00Z (JD 2451545.0) in Unix milliseconds. */
+const J2000_MS = 946_728_000_000
+
+/**
+ * Days since J2000.0 (UT), computed directly from milliseconds. Going through
+ * the absolute Julian Day (~2.46 million) would quantise time to ~0.04 ms —
+ * at true scale that is a metre-sized per-frame jitter in Earth's position.
+ */
+export function daysSinceJ2000(ms: number): number {
+  return (ms - J2000_MS) / 86_400_000
+}
+
 /** Wrap an angle in degrees to [-180, 180). */
 export function wrap180(deg: number): number {
   const d = ((deg + 180) % 360 + 360) % 360
@@ -33,9 +45,9 @@ function wrap360(deg: number): number {
 
 /** Greenwich mean sidereal time in degrees, [0, 360). (Meeus 12.4) */
 export function gmstDeg(ms: number): number {
-  const jd = julianDay(ms)
-  const T  = (jd - 2451545.0) / 36525
-  return wrap360(280.46061837 + 360.98564736629 * (jd - 2451545.0) + T * T * (0.000387933 - T / 38710000))
+  const d  = daysSinceJ2000(ms)
+  const T  = d / 36525
+  return wrap360(280.46061837 + 360.98564736629 * d + T * T * (0.000387933 - T / 38710000))
 }
 
 export interface SubsolarResult {
@@ -60,8 +72,7 @@ export function createSubsolarResult(): SubsolarResult {
  * equation of time:  lon = −15° · (UTC_hours − 12 + EoT/60).
  */
 export function subsolarPoint(ms: number, out: SubsolarResult): SubsolarResult {
-  const jd = julianDay(ms)
-  const T  = (jd - 2451545.0) / 36525
+  const T  = daysSinceJ2000(ms) / 36525
 
   const L0 = wrap360(280.46646 + T * (36000.76983 + T * 0.0003032))   // geometric mean longitude
   const M  = 357.52911 + T * (35999.05029 - 0.0001537 * T)            // mean anomaly
@@ -133,8 +144,7 @@ const _sun = createSubsolarResult()
 
 /** Geocentric Moon position and phase (Meeus ch. 47, truncated). */
 export function moonPosition(ms: number, out: MoonResult): MoonResult {
-  const jd = julianDay(ms)
-  const T  = (jd - 2451545.0) / 36525
+  const T  = daysSinceJ2000(ms) / 36525
 
   const Lp = 218.3164477 + 481267.88123421 * T   // Moon mean longitude
   const D  = (297.8501921 + 445267.1114034 * T) * DEG   // mean elongation

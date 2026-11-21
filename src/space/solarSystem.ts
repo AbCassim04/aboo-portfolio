@@ -42,6 +42,9 @@ const ADAPT_MIN = 0.3
 const ADAPT_MAX = 400
 const ADAPT_TAU = 1.2
 
+/** Planets other than Earth (placed from their system barycentres). */
+const OUTER_PLANETS: readonly PlanetId[] = ['mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']
+
 export const BODY_ORDER: BodyId[] = ['sun', 'mercury', 'venus', 'earth', 'moon', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']
 
 const IMPOSTOR_COLOR: Record<BodyId, number> = {
@@ -78,6 +81,10 @@ const _tmp   = new THREE.Vector3()
 const _toSun = new THREE.Vector3()
 const _toObs = new THREE.Vector3()
 const _rel   = new THREE.Vector3()
+const _e0 = new THREE.Vector3(), _e1 = new THREE.Vector3()
+const _m0 = new THREE.Vector3(), _m1 = new THREE.Vector3()
+const _rv = new THREE.Vector3(), _mid = new THREE.Vector3(), _rl = new THREE.Vector3()
+const _rq = new THREE.Quaternion()
 
 export class SolarSystem {
   readonly bodies: Record<BodyId, Body>
@@ -90,6 +97,11 @@ export class SolarSystem {
   readonly orbits: OrbitLines
   /** Current eye-adaptation factor (1 at 1 AU). */
   adaptation = 1
+  /**
+   * World velocity of every body (km per real second): the ephemeris
+   * derivative times the sim rate (sim seconds per real second).
+   */
+  readonly velocities: Record<BodyId, THREE.Vector3>
   /** Earth→Sun unit vector and Earth's spin axis (fed to Live Earth). */
   private readonly earthSunDir = new THREE.Vector3(-1, 0, 0)
   private readonly earthPole   = new THREE.Vector3(0, 1, 0)
@@ -173,6 +185,7 @@ export class SolarSystem {
       return { id, world, radius: P[id].radius, object, discPx: 0, magnitude: 0 }
     })
     this.bodies = Object.fromEntries(this.list.map(b => [b.id, b])) as Record<BodyId, Body>
+    this.velocities = Object.fromEntries(BODY_ORDER.map(id => [id, new THREE.Vector3()])) as Record<BodyId, THREE.Vector3>
 
     // ── Impostors & orbits ──
     this.impostors = new Impostors(this.list.length)
@@ -194,9 +207,10 @@ export class SolarSystem {
 
   /**
    * World positions and orientations for `simMs`. `camWorld` is the camera's
-   * world position (for eye adaptation), `dt` the frame time (s).
+   * world position (for eye adaptation), `dt` the frame time (s), `simRate`
+   * sim seconds per real second (for velocities).
    */
-  update(simMs: number, camWorld: THREE.Vector3, dt: number): void {
+  update(simMs: number, camWorld: THREE.Vector3, dt: number, simRate = 1): void {
     const B = this.bodies
     // Earth first (others use it), from the EM barycentre and the Moon.
     earthPositionKm(simMs, B.earth.world, this.moonGeo)
@@ -209,7 +223,7 @@ export class SolarSystem {
     this.moonPlacer.update(simMs)
     B.moon.world.addVectors(B.earth.world, this.moonPlacer.offset)
 
-    for (const id of ['mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as PlanetId[]) {
+    for (const id of OUTER_PLANETS) {
       planetBarycentreKm(id, simMs, B[id].world)
       bodyQuaternion(id, simMs, this.planetMeshes[id]!.group.quaternion)
     }
@@ -227,6 +241,29 @@ export class SolarSystem {
     this.saturnRingMat.color.setScalar(ringGain)
 
     this.orbits.recompute(simMs)
+    this.computeVelocities(simMs, simRate)
+  }
+
+  /** Central differences over ±0.5 s of sim time, scaled to real seconds. */
+  private computeVelocities(simMs: number, simRate: number): void {
+    const V = this.velocities
+    const h = 500
+    earthPositionKm(simMs + h, _e1, _m1)
+    earthPositionKm(simMs - h, _e0, _m0)
+    V.earth.subVectors(_e1, _e0).multiplyScalar(simRate)
+    // The Moon is placed from the Live Earth chain (equinox of date): rotate
+    // the ephemeris (J2000) geocentric velocity onto that direction so the
+    // velocity matches how the placed Moon actually moves.
+    _rv.subVectors(_m1, _m0).multiplyScalar(simRate)
+    _mid.addVectors(_m1, _m0).normalize()
+    if (this.moonPlacer.offset.lengthSq() > 0) _rv.applyQuaternion(_rq.setFromUnitVectors(_mid, _rl.copy(this.moonPlacer.offset).normalize()))
+    V.moon.copy(V.earth).add(_rv)
+    V.sun.set(0, 0, 0)
+    for (const id of OUTER_PLANETS) {
+      planetBarycentreKm(id, simMs + h, _e1)
+      planetBarycentreKm(id, simMs - h, _e0)
+      V[id].subVectors(_e1, _e0).multiplyScalar(simRate)
+    }
   }
 
   /**

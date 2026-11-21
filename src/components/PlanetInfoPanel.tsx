@@ -1,22 +1,42 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import { PLANET_DATA } from '../data/planetData'
+import { findInfo } from '../data/planetData'
+
+export interface InfoActions {
+  onFastTravel: () => void
+  onAutopilot:  () => void
+  onSetTarget:  () => void
+  /** Already the current target. */
+  isTarget:     boolean
+  /** Current distance, formatted (optional). */
+  distance?:    string
+}
 
 interface PlanetInfoPanelProps {
   planetKey: string | null
   onClose:   () => void
+  /** Navigation actions (Fast travel / Autopilot / Set target). */
+  actions?:  InfoActions | null
 }
 
-export default function PlanetInfoPanel({ planetKey, onClose }: PlanetInfoPanelProps) {
+export default function PlanetInfoPanel({ planetKey, onClose, actions }: PlanetInfoPanelProps) {
   const [isMobile] = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
-  const planet = PLANET_DATA.find((p) => p.key === planetKey) ?? null
+  const planet = findInfo(planetKey)
+  const actBtn = (primary: boolean): React.CSSProperties => ({
+    flex: '1 1 0', minWidth: 0, height: 44, borderRadius: 12, cursor: 'pointer', fontFamily: 'Kanit, sans-serif',
+    fontSize: '0.68rem', letterSpacing: '0.12em', fontWeight: 600, touchAction: 'manipulation',
+    border: `1px solid ${primary ? 'rgba(125,249,255,0.6)' : 'rgba(139,92,246,0.5)'}`,
+    background: primary ? 'rgba(125,249,255,0.12)' : 'rgba(139,92,246,0.12)',
+    color: primary ? '#bff9ff' : '#e8ddff',
+  })
 
   return (
     <AnimatePresence>
       {planet && (
         <motion.div
           key="planet-info-backdrop"
+          data-info="backdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -116,6 +136,22 @@ export default function PlanetInfoPanel({ planetKey, onClose }: PlanetInfoPanelP
             >
               {planet.subtitle}
             </p>
+
+            {/* Navigation actions */}
+            {actions && (
+              <div data-info="actions" style={{ display: 'flex', gap: '0.5rem', margin: '0 0 1.25rem 0' }}>
+                <button data-info="fasttravel" onClick={actions.onFastTravel} style={actBtn(true)}>FAST TRAVEL</button>
+                <button data-info="autopilot" onClick={actions.onAutopilot} style={actBtn(false)}>AUTOPILOT</button>
+                <button data-info="target" onClick={actions.onSetTarget} style={actBtn(false)}>
+                  {actions.isTarget ? 'TARGETED ✓' : 'SET TARGET'}
+                </button>
+              </div>
+            )}
+            {actions?.distance && (
+              <p style={{ margin: '-0.6rem 0 1.1rem 0', color: 'rgba(215,226,234,0.55)', fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+                Distance: <span data-info="distance" style={{ color: '#fff' }}>{actions.distance}</span>
+              </p>
+            )}
 
             {/* Stat rows */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>

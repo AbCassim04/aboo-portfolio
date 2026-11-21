@@ -61,14 +61,22 @@ const STANDISH: Record<PlanetId, readonly [Row, Row]> = {
             [ 0.00026291, 0.00005105,  0.00035372,  218.45945325, -0.32241464,  -0.00508664]],
 }
 
-/** Julian centuries (TT) since J2000.0 for a Unix time in milliseconds (UTC). */
-export function centuriesTT(ms: number): number {
-  return ((ms / 1000 + TT_MINUS_UTC_S) / 86400 + 2440587.5 - 2451545.0) / 36525
+/** 2000-01-01T12:00:00 (JD 2451545.0) as Unix milliseconds. */
+const J2000_MS = 946_728_000_000
+
+/**
+ * Days (TT) since J2000.0 for a Unix time in milliseconds (UTC). Computed
+ * directly from milliseconds: going through the absolute Julian Day
+ * (~2.46 million) quantises time to ~0.04 ms, a metre-sized per-frame jitter
+ * in planet positions at true scale.
+ */
+export function daysTT(ms: number): number {
+  return (ms + TT_MINUS_UTC_S * 1000 - J2000_MS) / 86_400_000
 }
 
-/** Days (TT) since J2000.0. */
-export function daysTT(ms: number): number {
-  return (ms / 1000 + TT_MINUS_UTC_S) / 86400 + 2440587.5 - 2451545.0
+/** Julian centuries (TT) since J2000.0. */
+export function centuriesTT(ms: number): number {
+  return daysTT(ms) / 36525
 }
 
 /** Write ecliptic-J2000 coordinates (any unit) into a scene vector. */
