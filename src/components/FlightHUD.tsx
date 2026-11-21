@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
 import type { FlightInput } from '../hooks/useFlightControls'
 import Joystick from './Joystick'
+import EarthTimeChip from './EarthTimeChip'
+import type { CloudStatus } from '../earth/liveClouds'
 
 export interface PlanetDot {
   name: string; x: number; y: number; color: string
@@ -26,6 +28,7 @@ interface FlightHUDProps {
   inputRef:       React.MutableRefObject<FlightInput>
   onToggleLight?: () => void
   lightOn?:       boolean
+  cloudStatus?:   CloudStatus
 }
 
 const RADAR_SIZE  = 120
@@ -33,7 +36,7 @@ const RADAR_SCALE = 56 / 32
 
 export default function FlightHUD({
   speed, isBoosting, nearestPlanet, ufoX, ufoY, planetDots, solarBodies, activeBodyKey,
-  onExit, inputRef, onToggleLight, lightOn,
+  onExit, inputRef, onToggleLight, lightOn, cloudStatus,
 }: FlightHUDProps) {
   const [isMobile]   = useState(() => 'ontouchstart' in window || navigator.maxTouchPoints > 0)
   const [boostNotif, setBoostNotif] = useState<string | null>(null)
@@ -192,6 +195,22 @@ export default function FlightHUD({
           Return to Hub
         </motion.button>
       </div>
+
+      {/* Earth time / live-cloud chip — top-left on desktop; on phones it sits
+          under the Exit button, clear of the radar column (top-left), the
+          joysticks and BOOST/LAND (bottom) */}
+      {cloudStatus && (
+        <EarthTimeChip
+          isMobile={isMobile}
+          cloudStatus={cloudStatus}
+          style={{
+            position: 'absolute',
+            ...(isMobile
+              ? { top: '4.3rem', right: '1rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }
+              : { top: '1.5rem', left: '1.5rem' }),
+          }}
+        />
+      )}
 
       {/* Landing prompt */}
       <AnimatePresence>

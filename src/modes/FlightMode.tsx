@@ -21,6 +21,11 @@ import SkillsOverlay         from '../overlays/SkillsOverlay'
 import ProjectsOverlay       from '../overlays/ProjectsOverlay'
 import ContactOverlay        from '../overlays/ContactOverlay'
 import type { Zone as NavZone } from '../hooks/useCameraNavigation'
+import { createLiveEarth }   from '../earth/LiveEarth'
+import { createMoonPlacer }  from '../earth/moon'
+import { pickLatLon }        from '../earth/geo'
+import type { CloudStatus }  from '../earth/liveClouds'
+import { getSimTimeMs }      from '../sim/simClock'
 
 // ── GLSL shaders ───────────────────────────────────────────────────────────
 
@@ -256,15 +261,15 @@ const EARTH_POS          = new THREE.Vector3(0, 0, 0)
 const EARTH_BUFFER       = 12
 const MOON_RADIUS        = 3
 const MOON_ORBIT_RADIUS  = 30
-const MOON_ORBIT_SPEED   = 0.003
 const ISS_ORBIT_RADIUS   = 22
-const ISS_ORBIT_SPEED    = 0.0008
+const ISS_ORBIT_SPEED    = 0.048    // rad/s (was 0.0008 rad/frame at 60 fps)
 const ISS_SCALE          = 0.1
 const JWST_ORBIT_RADIUS  = 30
-const JWST_ORBIT_SPEED   = 0.0003
+const JWST_ORBIT_SPEED   = 0.018    // rad/s (was 0.0003 rad/frame)
 const JWST_SCALE         = 0.08
 const ASTRONAUT_ORBIT_RADIUS = 35
-const ASTRONAUT_SPEED        = 0.0006
+const ASTRONAUT_SPEED        = 0.036                  // rad/s (was 0.0006 rad/frame)
+const ASTRONAUT_TUMBLE       = [0.06, 0.048, 0.03]    // rad/s about x, y, z (was 0.001/0.0008/0.0005 per frame)
 const ASTRONAUT_SCALE        = 3.0
 // Start just ahead-right of the spawn view so he drifts in front of the player
 // after the loading screen lifts (0.3π started him off-screen left, drifting behind).
@@ -273,6 +278,34 @@ const ASTRONAUT_START_ANGLE  = -0.35
 const ASTRONAUT_LIGHT_OFFSET    = 6
 const ASTRONAUT_LIGHT_INTENSITY = 30
 const ASTRONAUT_LIGHT_RANGE     = 12
+
+// Animation rates that used to be applied once per frame were tuned at 60 fps.
+// The loop now scales them by k = dt · REF_FPS (dt = clamped frame time), so
+// they look the same at 60 fps and no longer speed up on 120/144 Hz screens.
+const REF_FPS      = 60
+const TRAIL_STEP   = 1 / REF_FPS   // trails keep one sample per 1/60 s
+const HUD_INTERVAL = 0.1           // React HUD state updates at ~10 Hz
+
+/**
+ * Advance a position trail by `steps` fixed-interval samples. Slot 0 is the
+ * live head (`to`); new samples are interpolated from the previous head so a
+ * long frame doesn't leave gaps. With 0 steps only the head moves.
+ */
+function advanceTrail(buf: Float32Array, count: number, steps: number, to: THREE.Vector3): void {
+  const n = Math.min(steps, count - 1)
+  if (n > 0) {
+    const fx = buf[0], fy = buf[1], fz = buf[2]
+    buf.copyWithin(n * 3, 0, (count - n) * 3)
+    for (let s = 0; s < n; s++) {
+      const f = 1 - s / n
+      buf[s * 3]     = fx + (to.x - fx) * f
+      buf[s * 3 + 1] = fy + (to.y - fy) * f
+      buf[s * 3 + 2] = fz + (to.z - fz) * f
+    }
+  } else {
+    buf[0] = to.x; buf[1] = to.y; buf[2] = to.z
+  }
+}
 
 // ── Universe constants (match SpaceCanvas) ─────────────────────────────────
 const NODE_COUNT_DESKTOP = 80
@@ -342,86 +375,6 @@ function makeDestLabel(text: string, hexColor: number): THREE.CanvasTexture {
   return tex
 }
 
-// Earth textures: bobbyroe/threejs-earth (MIT)
-function createEarth(loader: THREE.TextureLoader, isMobile: boolean): {
-  group:     THREE.Group
-  earthMesh: THREE.Mesh
-  cloudMesh: THREE.Mesh
-  dispose:   () => void
-} {
-  const group = new THREE.Group()
-  const INNER_SEGS = isMobile ? 32 : 64
-
-  const base      = import.meta.env.BASE_URL
-  const dayTex    = loader.load(base + 'earth/earth-day.jpg')
-  const nightTex  = loader.load(base + 'earth/earth-night.jpg')
-  const cloudTex  = loader.load(base + 'earth/earth-clouds.jpg')
-
-  dayTex.colorSpace   = THREE.SRGBColorSpace
-  nightTex.colorSpace = THREE.SRGBColorSpace
-  cloudTex.colorSpace = THREE.SRGBColorSpace
-
-  const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, INNER_SEGS, INNER_SEGS)
-  const earthMat = new THREE.MeshPhongMaterial({
-    map:               dayTex,
-    emissiveMap:       nightTex,
-    emissive:          new THREE.Color(0xffffff),
-    emissiveIntensity: 0.6,
-    shininess:         10,
-    side:              THREE.FrontSide,
-    depthWrite:        true,
-  })
-  const earthMesh = new THREE.Mesh(earthGeo, earthMat)
-  group.add(earthMesh)
-
-  const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.5, INNER_SEGS, INNER_SEGS)
-  const cloudMat = new THREE.MeshPhongMaterial({
-    map:         cloudTex,
-    transparent: true,
-    opacity:     0.35,
-    depthWrite:  false,
-    side:        THREE.DoubleSide,
-  })
-  const cloudMesh = new THREE.Mesh(cloudGeo, cloudMat)
-  group.add(cloudMesh)
-
-  const atmoGeo = new THREE.SphereGeometry(EARTH_RADIUS + 1, INNER_SEGS, INNER_SEGS)
-  const atmoMat = new THREE.ShaderMaterial({
-    vertexShader: `
-      varying vec3 vNormal;
-      void main() {
-        vNormal = normalize(normalMatrix * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }`,
-    fragmentShader: `
-      varying vec3 vNormal;
-      void main() {
-        float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 3.0);
-        gl_FragColor = vec4(0.3, 0.6, 1.0, 1.0) * intensity;
-      }`,
-    side:        THREE.BackSide,
-    blending:    THREE.AdditiveBlending,
-    transparent: true,
-    depthWrite:  false,
-  })
-  group.add(new THREE.Mesh(atmoGeo, atmoMat))
-
-  group.position.copy(EARTH_POS)
-  group.rotation.z = 0.4101
-
-  return {
-    group,
-    earthMesh,
-    cloudMesh,
-    dispose: () => {
-      earthGeo.dispose(); earthMat.dispose()
-      cloudGeo.dispose(); cloudMat.dispose()
-      atmoGeo.dispose();  atmoMat.dispose()
-      dayTex.dispose();   nightTex.dispose();  cloudTex.dispose()
-    },
-  }
-}
-
 function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THREE.Mesh; dispose: () => void } {
   const base    = import.meta.env.BASE_URL
   const moonTex = loader.load(base + 'earth/8k_moon.jpg')
@@ -441,162 +394,134 @@ function createMoon(loader: THREE.TextureLoader, isMobile: boolean): { mesh: THR
   }
 }
 
-function createISS(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
+// ── GLB helpers ─────────────────────────────────────────────────────────────
+
+/** Dispose a material and every texture it references (deduplicated). */
+function disposeMaterial(mat: THREE.Material, seenTextures: Set<THREE.Texture>): void {
+  for (const value of Object.values(mat)) {
+    const tex = value as THREE.Texture | null
+    if (tex && tex.isTexture && !seenTextures.has(tex)) {
+      seenTextures.add(tex)
+      tex.dispose()
+      // GLTFLoader decodes to ImageBitmap where supported; release it eagerly.
+      if (typeof ImageBitmap !== 'undefined' && tex.image instanceof ImageBitmap) tex.image.close()
+    }
+  }
+  mat.dispose()
+}
+
+/** Dispose all geometries, materials and textures under `root`. */
+function disposeObjectTree(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>()
+  const materials  = new Set<THREE.Material>()
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh
+    if (!mesh.isMesh) return
+    if (mesh.geometry) geometries.add(mesh.geometry)
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const m of mats) if (m) materials.add(m)
+  })
+  const textures = new Set<THREE.Texture>()
+  for (const g of geometries) g.dispose()
+  for (const m of materials) disposeMaterial(m, textures)
+}
+
+interface LoadedModel { group: THREE.Group; dispose: () => void }
+
+/** Load a Draco-compressed GLB; `prepare` adjusts the scene before resolving. */
+function loadGLB(
+  file: string, label: string, manager: THREE.LoadingManager | undefined, prepare: (group: THREE.Group) => void,
+): Promise<LoadedModel> {
   return new Promise((resolve, reject) => {
-    const base        = import.meta.env.BASE_URL
     const dracoLoader = new DRACOLoader()
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
     const loader = new GLTFLoader(manager)
     loader.setDRACOLoader(dracoLoader)
     loader.load(
-      base + 'models/iss.glb',
+      import.meta.env.BASE_URL + 'models/' + file,
       (gltf) => {
-        const group = gltf.scene
-        group.scale.setScalar(ISS_SCALE)
-        group.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh
-            mesh.castShadow    = false
-            mesh.receiveShadow = false
-          }
-        })
         dracoLoader.dispose()
-        resolve({
-          group,
-          dispose: () => {
-            group.traverse((child) => {
-              if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh
-                mesh.geometry?.dispose()
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach(m => m.dispose())
-                } else {
-                  mesh.material?.dispose()
-                }
-              }
-            })
-          },
-        })
+        const group = gltf.scene
+        prepare(group)
+        resolve({ group, dispose: () => disposeObjectTree(group) })
       },
       undefined,
-      (error)    => { console.error('❌ ISS failed to load', error); reject(error) },
+      (error) => {
+        dracoLoader.dispose()
+        console.error(`❌ ${label} failed to load`, error)
+        reject(error)
+      },
     )
   })
 }
 
-function createJWST(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
-  return new Promise((resolve, reject) => {
-    const base        = import.meta.env.BASE_URL
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    const loader = new GLTFLoader(manager)
-    loader.setDRACOLoader(dracoLoader)
-    loader.load(
-      base + 'models/jwst.glb',
-      (gltf) => {
-        const group = gltf.scene
-        group.scale.setScalar(JWST_SCALE)
-        group.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh
-            mesh.castShadow    = false
-            mesh.receiveShadow = false
-          }
-        })
-        dracoLoader.dispose()
-        resolve({
-          group,
-          dispose: () => {
-            group.traverse((child) => {
-              if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh
-                mesh.geometry?.dispose()
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach(m => m.dispose())
-                } else {
-                  mesh.material?.dispose()
-                }
-              }
-            })
-          },
-        })
-      },
-      undefined,
-      (error)    => { console.error('❌ JWST failed to load', error); reject(error) },
-    )
+function noShadows(group: THREE.Object3D): void {
+  group.traverse((child) => {
+    const mesh = child as THREE.Mesh
+    if (mesh.isMesh) { mesh.castShadow = false; mesh.receiveShadow = false }
   })
 }
 
-function createAstronaut(manager?: THREE.LoadingManager): Promise<{ group: THREE.Group; dispose: () => void }> {
-  return new Promise((resolve, reject) => {
-    const base        = import.meta.env.BASE_URL
-    const dracoLoader = new DRACOLoader()
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
-    const loader = new GLTFLoader(manager)
-    loader.setDRACOLoader(dracoLoader)
-    loader.load(
-      base + 'models/astronaut-compressed.glb',
-      (gltf) => {
-        const group = gltf.scene
+function createISS(manager?: THREE.LoadingManager): Promise<LoadedModel> {
+  return loadGLB('iss.glb', 'ISS', manager, (group) => {
+    group.scale.setScalar(ISS_SCALE)
+    noShadows(group)
+  })
+}
 
-        // The GLB root node (Sketchfab_model) has a baked-in matrix that
-        // translates the model ~(177, 283, -438) in local space with scale ~0.00143.
-        // Without normalisation the model appears thousands of units from the orbit.
-        // Fix: compute the bounding box, shift child[0] so the model is centred at
-        // the group origin, then scale the group so the model is ASTRONAUT_SCALE units.
-        group.updateMatrixWorld(true)
-        const rawBox    = new THREE.Box3().setFromObject(group)
-        const rawCenter = rawBox.getCenter(new THREE.Vector3())
-        const rawSize   = rawBox.getSize(new THREE.Vector3())
-        const maxDim    = Math.max(rawSize.x, rawSize.y, rawSize.z)
+function createJWST(manager?: THREE.LoadingManager): Promise<LoadedModel> {
+  return loadGLB('jwst.glb', 'JWST', manager, (group) => {
+    group.scale.setScalar(JWST_SCALE)
+    noShadows(group)
+  })
+}
 
-        // Shift the Sketchfab root child so the model is centred at (0,0,0)
-        if (group.children[0]) {
-          group.children[0].position.sub(rawCenter)
-          group.children[0].updateMatrix()
-        }
+function createAstronaut(manager?: THREE.LoadingManager): Promise<LoadedModel> {
+  return loadGLB('astronaut-compressed.glb', 'Astronaut', manager, (group) => {
+    // The GLB root node (Sketchfab_model) has a baked-in matrix that
+    // translates the model ~(177, 283, -438) in local space with scale ~0.00143.
+    // Without normalisation the model appears thousands of units from the orbit.
+    // Fix: compute the bounding box, shift child[0] so the model is centred at
+    // the group origin, then scale the group so the model is ASTRONAUT_SCALE units.
+    group.updateMatrixWorld(true)
+    const rawBox    = new THREE.Box3().setFromObject(group)
+    const rawCenter = rawBox.getCenter(new THREE.Vector3())
+    const rawSize   = rawBox.getSize(new THREE.Vector3())
+    const maxDim    = Math.max(rawSize.x, rawSize.y, rawSize.z)
 
-        // Scale so the tallest axis equals ASTRONAUT_SCALE world units
-        group.scale.setScalar(maxDim > 0 ? ASTRONAUT_SCALE / maxDim : ASTRONAUT_SCALE)
+    // Shift the Sketchfab root child so the model is centred at (0,0,0)
+    if (group.children[0]) {
+      group.children[0].position.sub(rawCenter)
+      group.children[0].updateMatrix()
+    }
 
-        group.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            const mesh = child as THREE.Mesh
-            mesh.castShadow    = false
-            mesh.receiveShadow = false
-            mesh.frustumCulled = false
-            // KHR_materials_pbrSpecularGlossiness is unsupported in Three.js r184;
-            // replace every mesh's material with a lit MeshStandardMaterial (lit by the
-            // sun plus the viewer-side fill light set up when he's added to the scene)
-            mesh.material = new THREE.MeshStandardMaterial({
-              color:     new THREE.Color(0xddddcc),
-              roughness: 0.7,
-              metalness: 0.1,
-              side:      THREE.DoubleSide,
-            })
-          }
-        })
-        dracoLoader.dispose()
-        resolve({
-          group,
-          dispose: () => {
-            group.traverse((child) => {
-              if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh
-                mesh.geometry?.dispose()
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach(m => m.dispose())
-                } else {
-                  mesh.material?.dispose()
-                }
-              }
-            })
-          },
-        })
-      },
-      undefined,
-      (error) => { console.error('❌ Astronaut failed to load', error); reject(error) },
-    )
+    // Scale so the tallest axis equals ASTRONAUT_SCALE world units
+    group.scale.setScalar(maxDim > 0 ? ASTRONAUT_SCALE / maxDim : ASTRONAUT_SCALE)
+
+    // KHR_materials_pbrSpecularGlossiness is unsupported in Three.js r184, so
+    // every mesh gets one shared lit MeshStandardMaterial (lit by the sun plus
+    // the viewer-side fill light set up when he's added to the scene). The
+    // original GLTF materials and their embedded textures are never rendered:
+    // collect them and dispose them right after the swap.
+    const replacement = new THREE.MeshStandardMaterial({
+      color:     new THREE.Color(0xddddcc),
+      roughness: 0.7,
+      metalness: 0.1,
+      side:      THREE.DoubleSide,
+    })
+    const originals = new Set<THREE.Material>()
+    group.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      mesh.castShadow    = false
+      mesh.receiveShadow = false
+      mesh.frustumCulled = false
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const m of mats) if (m) originals.add(m)
+      mesh.material = replacement
+    })
+    const textures = new Set<THREE.Texture>()
+    for (const m of originals) disposeMaterial(m, textures)
   })
 }
 
@@ -623,6 +548,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
   const [loadProgress,  setLoadProgress]  = useState(0)
   const [loadDone,      setLoadDone]      = useState(false)
   const [lightOn,       setLightOn]       = useState(false)
+  const [cloudStatus,   setCloudStatus]   = useState<CloudStatus>({ kind: 'loading' })
   const lightOnRef  = useRef(false)
   const ufoLightRef = useRef<THREE.SpotLight | null>(null)
 
@@ -1060,24 +986,55 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     scene.add(new THREE.Mesh(boundGeo, boundMat))
 
     // ── 12. Earth (decorative) ────────────────────────────────────────────
-    const earthObj = createEarth(sharedLoader, isMobile)
+    // Real-time Earth (shared module): oriented from the sim clock so the real
+    // subsolar point faces the Sun at x=−4000; the light itself never moves.
+    const earthObj = createLiveEarth(sharedLoader, isMobile, {
+      radius:        EARTH_RADIUS,
+      sunLight,
+      renderer,
+      onCloudStatus: setCloudStatus,
+    })
+    earthObj.group.position.copy(EARTH_POS)
     scene.add(earthObj.group)
 
     const moonObj = createMoon(sharedLoader, isMobile)
     scene.add(moonObj.mesh)
-    let moonAngle = 0
+    const moonPlacer = createMoonPlacer(moonObj.mesh, earthObj.group, MOON_ORBIT_RADIUS)
+    moonPlacer.update(getSimTimeMs(), true)
+
+    // DEV: double-click the globe to log its lat/lon (calibration aid).
+    const pickRay   = new THREE.Raycaster()
+    const pickNdc   = new THREE.Vector2()
+    const onPickDbl = (e: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect()
+      pickNdc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+      pickRay.setFromCamera(pickNdc, camera)
+      const ll = pickLatLon(pickRay, earthObj.earthMesh)
+      if (ll) console.info(`[earth] lat ${ll.lat.toFixed(3)}°, lon ${ll.lon.toFixed(3)}°`)
+    }
+    if (import.meta.env.DEV) renderer.domElement.addEventListener('dblclick', onPickDbl)
 
     // GLB models are loaded well after the initial scene so their parsing never
-    // competes with the first-frame render / GPU pre-warm.
+    // competes with the first-frame render / GPU pre-warm. A model can finish
+    // after the player has left flight mode: `unmounted` (set in cleanup) makes
+    // the callback dispose it instead of adding it to the discarded scene.
+    let unmounted = false
+    const ignoreLoadError = () => { /* already logged by loadGLB */ }
+    const disposeLate = (name: string, dispose: () => void) => {
+      dispose()
+      if (import.meta.env.DEV) console.debug(`[flight] ${name} finished loading after exit — disposed`)
+    }
+
     let issGroup:   THREE.Group | null = null
     let issAngle    = 0
     let issDispose: (() => void) | null = null
     const issTimer = setTimeout(() => {
       createISS(loadingManager).then(({ group, dispose }) => {
+        if (unmounted) { disposeLate('ISS', dispose); return }
         issGroup   = group
         issDispose = dispose
         scene.add(issGroup)
-      })
+      }, ignoreLoadError)
     }, 8000)
 
     let jwstGroup:   THREE.Group | null = null
@@ -1087,10 +1044,11 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     if (!isMobile) {
       jwstTimer = setTimeout(() => {
         createJWST(loadingManager).then(({ group, dispose }) => {
+          if (unmounted) { disposeLate('JWST', dispose); return }
           jwstGroup   = group
           jwstDispose = dispose
           scene.add(jwstGroup)
-        })
+        }, ignoreLoadError)
       }, 12000)
     }
 
@@ -1099,13 +1057,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     let astronautDispose: (() => void) | null = null
     const astronautTimer = setTimeout(() => {
       createAstronaut(loadingManager).then(({ group, dispose }) => {
+        if (unmounted) { disposeLate('astronaut', dispose); return }
         astronautGroup   = group
         astronautDispose = dispose
         scene.add(astronautGroup)
         const astronautLight = new THREE.PointLight(0xfff5e0, ASTRONAUT_LIGHT_INTENSITY, ASTRONAUT_LIGHT_RANGE)
         astronautGroup.userData.light = astronautLight
         scene.add(astronautLight)
-      })
+      }, ignoreLoadError)
     }, 10000)
 
     // ── 12.5. Planets (static decorative) ────────────────────────────────
@@ -1239,7 +1198,8 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
     // Misc loop state
     let landingFired = false
-    let hudFrame     = 0
+    let hudClock     = 0
+    let trailClock   = 0
     let fpsCount     = 0
     let fpsLast      = performance.now()
 
@@ -1255,6 +1215,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       const dt  = Math.min((now - prevTime) / 1000, 0.05)
       prevTime  = now
       t        += dt
+      const k   = dt * REF_FPS   // frame-equivalents at the 60 fps the old rates assumed
 
       // DEV FPS
       if (import.meta.env.DEV) {
@@ -1263,7 +1224,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       }
 
       // Physics
-      update()
+      update(dt)
 
       // ── Earth surface repulsion ──────────────────────────────────────────
       const toUFO = ufoStateRef.current.position.clone().sub(EARTH_POS)
@@ -1297,37 +1258,32 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
 
       // ── Universe animations ────────────────────────────────────────────
       if (nebulaBgMat) nebulaBgMat.uniforms['uTime'].value = t
-      for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003
-      milkyMesh.rotation.y += 0.00002
+      for (const mesh of nebulaPlanes) mesh.rotation.z += 0.0003 * k
+      milkyMesh.rotation.y += 0.00002 * k
       starField.mat.uniforms.time.value = starClock.getElapsedTime()
-      starField.points.rotation.y += 0.000002
+      starField.points.rotation.y += 0.000002 * k
 
-      nodeGroup.rotation.y += 0.003
+      nodeGroup.rotation.y += 0.003 * k
       nodeGroup.rotation.x  = Math.sin(t * 0.3) * 0.12
       nodeGroup.scale.setScalar(1 + Math.sin(t * 0.5) * 0.03)
 
       for (const d of dustGroups) {
-        d.rotation.y += 0.001
+        d.rotation.y += 0.001 * k
         d.rotation.x  = Math.sin(t * 0.2) * 0.05
       }
       for (let i = 0; i < journeyDust.length; i++) {
-        journeyDust[i].rotation.y += 0.0008
+        journeyDust[i].rotation.y += 0.0008 * k
         journeyDust[i].rotation.x  = Math.sin(t * 0.15 + i) * 0.04
       }
 
-      // Earth rotation
-      earthObj.earthMesh.rotation.y += 0.0003
-      earthObj.cloudMesh.rotation.y += 0.0005
-      sunMesh.rotation.y            += 0.0001
-      moonAngle += MOON_ORBIT_SPEED
-      moonObj.mesh.position.set(
-        EARTH_POS.x + Math.cos(moonAngle) * MOON_ORBIT_RADIUS,
-        EARTH_POS.y + Math.sin(moonAngle * 0.2) * 8,
-        EARTH_POS.z + Math.sin(moonAngle) * MOON_ORBIT_RADIUS,
-      )
-      moonObj.mesh.rotation.y    += 0.0002
+      // Earth + Moon follow the shared sim clock (both no-op until the sim
+      // time has moved enough to matter).
+      const simMs = getSimTimeMs()
+      earthObj.update(simMs)
+      moonPlacer.update(simMs)
+      sunMesh.rotation.y += 0.0001 * k
       if (issGroup) {
-        issAngle += ISS_ORBIT_SPEED
+        issAngle += ISS_ORBIT_SPEED * dt
         issGroup.position.set(
           earthObj.group.position.x + Math.cos(issAngle) * ISS_ORBIT_RADIUS,
           earthObj.group.position.y + Math.sin(issAngle * 0.3) * 3,
@@ -1336,7 +1292,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         issGroup.rotation.y = -issAngle + Math.PI / 2
       }
       if (jwstGroup) {
-        jwstAngle += JWST_ORBIT_SPEED
+        jwstAngle += JWST_ORBIT_SPEED * dt
         jwstGroup.position.set(
           earthObj.group.position.x + Math.cos(jwstAngle + Math.PI) * JWST_ORBIT_RADIUS,
           earthObj.group.position.y + Math.sin(jwstAngle * 0.2) * 4,
@@ -1345,15 +1301,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         jwstGroup.rotation.y = -jwstAngle + Math.PI / 2
       }
       if (astronautGroup) {
-        astronautAngle += ASTRONAUT_SPEED
+        astronautAngle += ASTRONAUT_SPEED * dt
         astronautGroup.position.set(
           earthObj.group.position.x + Math.cos(astronautAngle) * ASTRONAUT_ORBIT_RADIUS,
           earthObj.group.position.y + Math.sin(astronautAngle * 0.5) * 5,
           earthObj.group.position.z + Math.sin(astronautAngle) * ASTRONAUT_ORBIT_RADIUS,
         )
-        astronautGroup.rotation.x += 0.001
-        astronautGroup.rotation.y += 0.0008
-        astronautGroup.rotation.z += 0.0005
+        astronautGroup.rotation.x += ASTRONAUT_TUMBLE[0] * dt
+        astronautGroup.rotation.y += ASTRONAUT_TUMBLE[1] * dt
+        astronautGroup.rotation.z += ASTRONAUT_TUMBLE[2] * dt
         if (astronautGroup.userData.light) {
           // Keep the fill light between the astronaut and the camera. At his centre
           // it sat inside the mesh and could only light inward-facing faces, so the
@@ -1365,15 +1321,15 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
             .add(astronautGroup.position)
         }
       }
-      mercuryObj.mesh.rotation.y += 0.0008
-      venusObj.mesh.rotation.y   -= 0.0001
-      venusObj.atmoMesh.rotation.y -= 0.00015
-      marsObj.mesh.rotation.y    += 0.0004
-      jupiterObj.mesh.rotation.y += 0.001
-      saturnObj.mesh.rotation.y  += 0.0009
-      uranusObj.mesh.rotation.y  += 0.0003
-      neptuneObj.mesh.rotation.y += 0.00035
-      asteroidBelt.update(camera.position)
+      mercuryObj.mesh.rotation.y   += 0.0008  * k
+      venusObj.mesh.rotation.y     -= 0.0001  * k
+      venusObj.atmoMesh.rotation.y -= 0.00015 * k
+      marsObj.mesh.rotation.y      += 0.0004  * k
+      jupiterObj.mesh.rotation.y   += 0.001   * k
+      saturnObj.mesh.rotation.y    += 0.0009  * k
+      uranusObj.mesh.rotation.y    += 0.0003  * k
+      neptuneObj.mesh.rotation.y   += 0.00035 * k
+      asteroidBelt.update(camera.position, dt)
 
       // Shooting stars (desktop)
       if (!isMobile) {
@@ -1403,36 +1359,29 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       const lightOp = entryDone ? (0.5 + 0.5 * Math.sin(t * 8)) * 0.8 : 0
       for (const m of ufoLightMats) m.opacity = lightOp
 
-      // Trail
+      // Trails: fixed 60 Hz sampling, so their length in time is frame-rate independent.
       const boostOn = inputRef.current.boost
+      trailClock += dt
+      const trailSteps = Math.floor(trailClock / TRAIL_STEP)
+      trailClock -= trailSteps * TRAIL_STEP
       if (trailPos && trailGeo && trailMat) {
-        for (let i = TRAIL_COUNT - 1; i > 0; i--) {
-          trailPos[i*3]   = trailPos[(i-1)*3]
-          trailPos[i*3+1] = trailPos[(i-1)*3+1]
-          trailPos[i*3+2] = trailPos[(i-1)*3+2]
-        }
-        trailPos[0] = ufoPos.x; trailPos[1] = ufoPos.y; trailPos[2] = ufoPos.z
+        advanceTrail(trailPos, TRAIL_COUNT, trailSteps, ufoPos)
         trailGeo.attributes.position.needsUpdate = true
         trailMat.opacity = entryDone ? (boostOn ? 0.15 : 0.55) : 0
       }
       if (boostTrailPos && boostTrailGeo && boostTrailMat) {
-        for (let i = BOOST_TRAIL_COUNT - 1; i > 0; i--) {
-          boostTrailPos[i*3]   = boostTrailPos[(i-1)*3]
-          boostTrailPos[i*3+1] = boostTrailPos[(i-1)*3+1]
-          boostTrailPos[i*3+2] = boostTrailPos[(i-1)*3+2]
-        }
-        boostTrailPos[0] = ufoPos.x; boostTrailPos[1] = ufoPos.y; boostTrailPos[2] = ufoPos.z
+        advanceTrail(boostTrailPos, BOOST_TRAIL_COUNT, trailSteps, ufoPos)
         boostTrailGeo.attributes.position.needsUpdate = true
         const targetOp = entryDone && boostOn ? 0.85 : 0
-        boostTrailMat.opacity += (targetOp - boostTrailMat.opacity) * 0.08
+        boostTrailMat.opacity += (targetOp - boostTrailMat.opacity) * (1 - Math.pow(1 - 0.08, k))
       }
 
       // ── Destination animations ─────────────────────────────────────────
       for (let i = 0; i < destGroups.length; i++) {
         const g = destGroups[i]
-        g.rotation.x += 0.005
-        g.rotation.y += 0.008
-        g.rotation.z += 0.003
+        g.rotation.x += 0.005 * k
+        g.rotation.y += 0.008 * k
+        g.rotation.z += 0.003 * k
         g.position.y = destOriginalY[i] + Math.sin(t * 0.5 + i) * 0.2
         g.scale.setScalar(1 + Math.sin(t * 0.8 + i) * 0.03)
         destLabels[i].position.y    = g.position.y + DESTINATIONS[i].size + 1.5
@@ -1462,7 +1411,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       } else {
         camOffset.set(0, 0.8, 2.5).applyEuler(ufoRot)
         camFollowPos.copy(ufoPos).add(camOffset)
-        camera.position.lerp(camFollowPos, 0.1)
+        camera.position.lerp(camFollowPos, 1 - Math.pow(1 - 0.1, k))   // 0.1 per frame at 60 fps
         camLookAt.set(0, 0, -2).applyEuler(ufoRot).add(ufoPos)
         camera.lookAt(camLookAt)
       }
@@ -1493,8 +1442,9 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
       }
 
       // ── HUD at ~10 fps ─────────────────────────────────────────────────
-      hudFrame++
-      if (hudFrame % 6 === 0) {
+      hudClock += dt
+      if (hudClock >= HUD_INTERVAL) {
+        hudClock = 0
         setActiveBodyKey(nearestBodyInRange ? nearestBodyKey : null)
         const vel      = state.velocity.length()
         const topSpeed = inputRef.current.boost ? 3.2 : 0.4
@@ -1557,12 +1507,14 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
     window.addEventListener('resize', onResize)
 
     return () => {
+      unmounted = true
       cancelAnimationFrame(rafId)
       clearTimeout(issTimer)
       if (jwstTimer) clearTimeout(jwstTimer)
       clearTimeout(astronautTimer)
       window.removeEventListener('resize', onResize)
       window.removeEventListener('keydown', handleLightKey)
+      renderer.domElement.removeEventListener('dblclick', onPickDbl)
 
       for (const g of destAllGeos) g.dispose()
       for (const m of destAllMats) m.dispose()
@@ -1637,6 +1589,7 @@ export default function FlightMode({ onExit, onEnterBlackHole }: FlightModeProps
         inputRef={inputRef}
         onToggleLight={toggleLight}
         lightOn={lightOn}
+        cloudStatus={cloudStatus}
       />
       <PlanetLabels dataRef={planetLabelDataRef} onSelect={setSelectedPlanet} />
       <PlanetInfoPanel planetKey={selectedPlanet} onClose={() => setSelectedPlanet(null)} />

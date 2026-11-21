@@ -532,11 +532,17 @@ export class AsteroidField {
     scene.add(this.pointsLow)
   }
 
-  update(cameraPosition?: THREE.Vector3): void {
+  /**
+   * @param dt seconds since the last call (default 1/60, i.e. the original
+   *           per-frame rates — the hub calls update() without it). Rates are
+   *           per 60 fps frame, scaled by k = dt · 60.
+   */
+  update(cameraPosition?: THREE.Vector3, dt = 1 / 60): void {
     this.time++
     if (this.isMobile && this.time % 3 !== 0) return
+    const k = dt * 60
 
-    this.dustPoints.rotation.y += 0.00001
+    this.dustPoints.rotation.y += 0.00001 * k
 
     const camPos = cameraPosition ?? this._zeroCam
 
@@ -556,13 +562,13 @@ export class AsteroidField {
     for (let i = 0; i < this.orbits.length; i++) {
       const orbit = this.orbits[i]
 
-      orbit.meanAnomaly += orbit.speed
+      orbit.meanAnomaly += orbit.speed * k
       if (orbit.meanAnomaly > Math.PI * 2) orbit.meanAnomaly -= Math.PI * 2
 
       this.orbitalToCartesian(orbit, this._tempPos)
 
-      this.rotations[i].x += 0.0001
-      this.rotations[i].y += 0.00015
+      this.rotations[i].x += 0.0001  * k
+      this.rotations[i].y += 0.00015 * k
 
       this.dummy.position.set(
         this.config.centerX + this._tempPos.x,

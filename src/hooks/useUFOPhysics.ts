@@ -9,6 +9,10 @@ export interface UFOState {
   angularVelocity: THREE.Vector3
 }
 
+// Tuning constants are expressed per 60 fps reference frame; update(dt) scales
+// them by k = dt · 60 (and per-frame decay factors by ^k), so handling is the
+// same as before at 60 fps and no longer faster on high-refresh displays.
+const REF_FPS      = 60
 const TURN_RATE    = 0.012  // rad/frame — deliberate turns, not spin
 const ANGULAR_DRAG = 0.88   // higher drag so rotation stops quickly when key released
 const AV_CAP       = 0.04   // max rad/frame per axis
@@ -22,7 +26,7 @@ const _pull    = new THREE.Vector3()
 
 export function useUFOPhysics(
   inputRef: React.MutableRefObject<FlightInput>,
-): { ufoStateRef: React.MutableRefObject<UFOState>; update: () => void } {
+): { ufoStateRef: React.MutableRefObject<UFOState>; update: (dt?: number) => void } {
   const ufoStateRef = useRef<UFOState>({
     position:        new THREE.Vector3(30, 0, 30),
     velocity:        new THREE.Vector3(),
@@ -30,51 +34,53 @@ export function useUFOPhysics(
     angularVelocity: new THREE.Vector3(),
   })
 
-  const update = () => {
+  /** Advance by `dt` seconds (callers pass the clamped frame time). */
+  const update = (dt = 1 / REF_FPS) => {
     const state = ufoStateRef.current
     const inp   = inputRef.current
+    const k     = dt * REF_FPS
 
     // Forward vector in world space (UFO faces -Z locally)
     _forward.set(0, 0, -1).applyEuler(state.rotation)
 
     // Thrust / brake
     const accel = inp.boost ? ACCEL * 8 : ACCEL
-    if (inp.thrust > 0) state.velocity.addScaledVector(_forward, accel * inp.thrust)
-    if (inp.brake  > 0) state.velocity.multiplyScalar(0.95)
+    if (inp.thrust > 0) state.velocity.addScaledVector(_forward, accel * inp.thrust * k)
+    if (inp.brake  > 0) state.velocity.multiplyScalar(Math.pow(0.95, k))
 
     // Vertical (world-space Y — more intuitive than local frame)
-    if (inp.vertical !== 0) state.velocity.y += inp.vertical * ACCEL * 0.8
+    if (inp.vertical !== 0) state.velocity.y += inp.vertical * ACCEL * 0.8 * k
 
     // Speed clamp
     const topSpeed = inp.boost ? MAX_SPEED_BOOST : MAX_SPEED
     if (state.velocity.length() > topSpeed) state.velocity.setLength(topSpeed)
 
     // Angular inputs
-    state.angularVelocity.y -= inp.yaw   * TURN_RATE
-    state.angularVelocity.x -= inp.pitch * TURN_RATE
-    state.angularVelocity.z -= inp.roll  * TURN_RATE
-    if (inp.pitchUp)   state.angularVelocity.x += TURN_RATE
-    if (inp.pitchDown) state.angularVelocity.x -= TURN_RATE
+    state.angularVelocity.y -= inp.yaw   * TURN_RATE * k
+    state.angularVelocity.x -= inp.pitch * TURN_RATE * k
+    state.angularVelocity.z -= inp.roll  * TURN_RATE * k
+    if (inp.pitchUp)   state.angularVelocity.x += TURN_RATE * k
+    if (inp.pitchDown) state.angularVelocity.x -= TURN_RATE * k
 
     // Drag
-    state.velocity.multiplyScalar(DRAG)
-    state.angularVelocity.multiplyScalar(ANGULAR_DRAG)
+    state.velocity.multiplyScalar(Math.pow(DRAG, k))
+    state.angularVelocity.multiplyScalar(Math.pow(ANGULAR_DRAG, k))
 
     // Cap angular velocity per axis
     state.angularVelocity.x = Math.max(-AV_CAP, Math.min(AV_CAP, state.angularVelocity.x))
     state.angularVelocity.y = Math.max(-AV_CAP, Math.min(AV_CAP, state.angularVelocity.y))
     state.angularVelocity.z = Math.max(-AV_CAP, Math.min(AV_CAP, state.angularVelocity.z))
 
-    // Integrate
-    state.position.add(state.velocity)
-    state.rotation.x += state.angularVelocity.x
-    state.rotation.y += state.angularVelocity.y
-    state.rotation.z += state.angularVelocity.z
+    // Integrate (velocity is in units per reference frame)
+    state.position.addScaledVector(state.velocity, k)
+    state.rotation.x += state.angularVelocity.x * k
+    state.rotation.y += state.angularVelocity.y * k
+    state.rotation.z += state.angularVelocity.z * k
 
     // Soft boundary pull at 2580u, hard clamp at 2600u
     const dist = state.position.length()
     if (dist > 8980) {
-      _pull.copy(state.position).normalize().multiplyScalar(-0.012)
+      _pull.copy(state.position).normalize().multiplyScalar(-0.012 * k)
       state.velocity.add(_pull)
     }
     if (dist > 9000) state.position.normalize().multiplyScalar(9000)

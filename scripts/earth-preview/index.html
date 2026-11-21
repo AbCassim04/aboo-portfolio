@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Earth preview</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #info { position: fixed; left: 8px; bottom: 8px; color: #9ab; font: 12px/1.4 monospace; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Dev-only calibration view of the shared Earth module (not part of the build).
+      npm run dev, then open /aboo-portfolio/scripts/earth-preview/ with optional params:
+        t=2026-11-21T01:40Z   UTC instant (default: now, live)
+        lat=0&lon=140.7       sub-camera point, i.e. look straight down on this place
+        dist=42               camera distance in Earth radii×… (scene units, Earth radius 10)
+        mobile=1              use the mobile texture set
+    -->
+    <div id="info"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

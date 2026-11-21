@@ -4,19 +4,29 @@ on:
   push:
     branches:
       - main
+  schedule:
+    # Every 3 hours at :25 — satellite imagery for the top of the hour is
+    # published ~30–40 min after observation (NASA GIBS, NOAA GMGSI).
+    # Scheduled runs always use the default branch (main).
+    - cron: '25 */3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# One deployment at a time. In-progress runs are never cancelled (a half-done
+# Pages deploy is worse than a slightly late one); a newer queued run replaces
+# an older queued one.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +39,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      # Builds public/live/ (cloud textures + manifest). Never blocks the deploy:
+      # the script itself falls back to the last deployed build or to
+      # "clouds: null" (static map), and this step is time-boxed and
+      # continue-on-error on top of that. Generated files are not committed.
+      - name: Fetch live cloud data
+        continue-on-error: true
+        timeout-minutes: 12
+        env:
+          LIVE_PREVIOUS_URL: ${{ steps.pages.outputs.base_url }}/
+        run: npm run fetch:clouds
 
       - name: Build
         run: npm run build
@@ -48,3 +73,20 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # GitHub disables scheduled workflows in public repos after 60 days without
+  # repository activity. Re-enabling the workflow through the API from the
+  # scheduled run itself keeps the schedule registered without dummy commits
+  # (same technique as the keepalive-workflow action's API mode). Isolated in
+  # its own job so only this step gets `actions: write`.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    steps:
+      - name: Re-enable this workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/deploy.yml/enable"
